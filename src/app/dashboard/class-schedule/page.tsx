@@ -40,6 +40,7 @@ export default function ClassSchedulePage() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [formData, setFormData] = useState({
         teacher_id: '',
         teacher_name: '',
@@ -56,9 +57,7 @@ export default function ClassSchedulePage() {
     const [scheduleData, setScheduleData] = useState({
         days: [] as string[],
         startTime: '',
-        endTime: '',
-        startPeriod: 'AM',
-        endPeriod: 'AM'
+        endTime: ''
     });
 
     useEffect(() => {
@@ -210,14 +209,23 @@ export default function ClassSchedulePage() {
             return order.indexOf(a) - order.indexOf(b);
         }).join('');
 
-        return `${daysStr} ${scheduleData.startTime} ${scheduleData.startPeriod} - ${scheduleData.endTime} ${scheduleData.endPeriod}`;
+        // Convert 24-hour format to 12-hour format with AM/PM
+        const formatTime = (time: string) => {
+            const [hours, minutes] = time.split(':');
+            const hour = parseInt(hours);
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${minutes} ${period}`;
+        };
+
+        return `${daysStr} ${formatTime(scheduleData.startTime)} - ${formatTime(scheduleData.endTime)}`;
     };
 
     const parseScheduleString = (scheduleStr: string) => {
         // Parse a schedule string like "MWF 8:00 AM - 9:00 AM" back into components
         const match = scheduleStr.match(/^([A-Za-z]+)\s+(\d+:\d+)\s+(AM|PM)\s+-\s+(\d+:\d+)\s+(AM|PM)$/);
         if (match) {
-            const [, daysStr, startTime, startPeriod, endTime, endPeriod] = match;
+            const [, daysStr, startTime12, startPeriod, endTime12, endPeriod] = match;
             const dayMap: { [key: string]: string } = {
                 'M': 'Mon', 'T': 'Tue', 'W': 'Wed', 'Th': 'Thu', 'F': 'Fri', 'S': 'Sat', 'Su': 'Sun'
             };
@@ -236,12 +244,22 @@ export default function ClassSchedulePage() {
                 }
             }
 
+            // Convert 12-hour format to 24-hour format for time input
+            const convertTo24Hour = (time: string, period: string) => {
+                const [hours, minutes] = time.split(':');
+                let hour = parseInt(hours);
+                if (period === 'PM' && hour !== 12) {
+                    hour += 12;
+                } else if (period === 'AM' && hour === 12) {
+                    hour = 0;
+                }
+                return `${hour.toString().padStart(2, '0')}:${minutes}`;
+            };
+
             setScheduleData({
                 days,
-                startTime,
-                endTime,
-                startPeriod,
-                endPeriod
+                startTime: convertTo24Hour(startTime12, startPeriod),
+                endTime: convertTo24Hour(endTime12, endPeriod)
             });
         }
     };
@@ -300,9 +318,7 @@ export default function ClassSchedulePage() {
             setScheduleData({
                 days: [],
                 startTime: '',
-                endTime: '',
-                startPeriod: 'AM',
-                endPeriod: 'AM'
+                endTime: ''
             });
         } catch (error) {
             console.error('Error adding class schedule:', error);
@@ -431,9 +447,7 @@ export default function ClassSchedulePage() {
         setScheduleData({
             days: [],
             startTime: '',
-            endTime: '',
-            startPeriod: 'AM',
-            endPeriod: 'AM'
+            endTime: ''
         });
     };
 
@@ -454,9 +468,7 @@ export default function ClassSchedulePage() {
         setScheduleData({
             days: [],
             startTime: '',
-            endTime: '',
-            startPeriod: 'AM',
-            endPeriod: 'AM'
+            endTime: ''
         });
     };
 
@@ -806,85 +818,22 @@ export default function ClassSchedulePage() {
                                         </div>
                                     )}
 
-                                    {/* Schedule - Days and Time */}
-                                    <div className="group space-y-3">
-                                        <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
+                                    {/* Schedule Button */}
+                                    <div className="group">
+                                        <label className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
                                             <Clock className="w-3 h-3 text-orange-500" />
                                             <span>Schedule</span>
                                         </label>
-
-                                        {/* Day Selector */}
-                                        <div>
-                                            <p className="text-xs text-slate-600 mb-2">Select Days:</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                                                    <button
-                                                        key={day}
-                                                        type="button"
-                                                        onClick={() => toggleDay(day)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${scheduleData.days.includes(day)
-                                                            ? 'bg-orange-500 text-white shadow-md'
-                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                            }`}
-                                                    >
-                                                        {day}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Time Inputs */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <p className="text-xs text-slate-600 mb-1">Start Time:</p>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="time"
-                                                        value={scheduleData.startTime}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, startTime: e.target.value }))}
-                                                        className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs"
-                                                        required
-                                                    />
-                                                    <select
-                                                        value={scheduleData.startPeriod}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, startPeriod: e.target.value }))}
-                                                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs font-medium"
-                                                    >
-                                                        <option value="AM">AM</option>
-                                                        <option value="PM">PM</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-slate-600 mb-1">End Time:</p>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="time"
-                                                        value={scheduleData.endTime}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, endTime: e.target.value }))}
-                                                        className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs"
-                                                        required
-                                                    />
-                                                    <select
-                                                        value={scheduleData.endPeriod}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, endPeriod: e.target.value }))}
-                                                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs font-medium"
-                                                    >
-                                                        <option value="AM">AM</option>
-                                                        <option value="PM">PM</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Preview */}
-                                        {formatScheduleString() && (
-                                            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                                                <p className="text-xs text-blue-700">
-                                                    <strong>Preview:</strong> {formatScheduleString()}
-                                                </p>
-                                            </div>
-                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowScheduleModal(true)}
+                                            className="w-full px-3 py-2 bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200 rounded-lg hover:from-orange-100 hover:to-orange-200 transition-all duration-200 text-left flex items-center justify-between group"
+                                        >
+                                            <span className="text-sm text-slate-700">
+                                                {formatScheduleString() || 'Click to set schedule'}
+                                            </span>
+                                            <Clock className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform duration-200" />
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1128,85 +1077,22 @@ export default function ClassSchedulePage() {
                                         </div>
                                     )}
 
-                                    {/* Schedule - Days and Time */}
-                                    <div className="group space-y-3">
-                                        <label className="text-xs font-semibold text-slate-700 flex items-center space-x-1">
+                                    {/* Schedule Button */}
+                                    <div className="group">
+                                        <label className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
                                             <Clock className="w-3 h-3 text-orange-500" />
                                             <span>Schedule</span>
                                         </label>
-
-                                        {/* Day Selector */}
-                                        <div>
-                                            <p className="text-xs text-slate-600 mb-2">Select Days:</p>
-                                            <div className="flex flex-wrap gap-2">
-                                                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                                                    <button
-                                                        key={day}
-                                                        type="button"
-                                                        onClick={() => toggleDay(day)}
-                                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${scheduleData.days.includes(day)
-                                                            ? 'bg-orange-500 text-white shadow-md'
-                                                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                                                            }`}
-                                                    >
-                                                        {day}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Time Inputs */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div>
-                                                <p className="text-xs text-slate-600 mb-1">Start Time:</p>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="time"
-                                                        value={scheduleData.startTime}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, startTime: e.target.value }))}
-                                                        className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs"
-                                                        required
-                                                    />
-                                                    <select
-                                                        value={scheduleData.startPeriod}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, startPeriod: e.target.value }))}
-                                                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs font-medium"
-                                                    >
-                                                        <option value="AM">AM</option>
-                                                        <option value="PM">PM</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-slate-600 mb-1">End Time:</p>
-                                                <div className="flex gap-2">
-                                                    <input
-                                                        type="time"
-                                                        value={scheduleData.endTime}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, endTime: e.target.value }))}
-                                                        className="flex-1 px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs"
-                                                        required
-                                                    />
-                                                    <select
-                                                        value={scheduleData.endPeriod}
-                                                        onChange={(e) => setScheduleData(prev => ({ ...prev, endPeriod: e.target.value }))}
-                                                        className="px-2 py-1.5 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-xs font-medium"
-                                                    >
-                                                        <option value="AM">AM</option>
-                                                        <option value="PM">PM</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Preview */}
-                                        {formatScheduleString() && (
-                                            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
-                                                <p className="text-xs text-blue-700">
-                                                    <strong>Preview:</strong> {formatScheduleString()}
-                                                </p>
-                                            </div>
-                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowScheduleModal(true)}
+                                            className="w-full px-3 py-2 bg-gradient-to-r from-orange-50 to-orange-100 border border-orange-200 rounded-lg hover:from-orange-100 hover:to-orange-200 transition-all duration-200 text-left flex items-center justify-between group"
+                                        >
+                                            <span className="text-sm text-slate-700">
+                                                {formatScheduleString() || 'Click to set schedule'}
+                                            </span>
+                                            <Clock className="w-4 h-4 text-orange-500 group-hover:scale-110 transition-transform duration-200" />
+                                        </button>
                                     </div>
                                 </div>
 
@@ -1256,6 +1142,100 @@ export default function ClassSchedulePage() {
                                     </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Schedule Configuration Modal */}
+            {showScheduleModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+                        {/* Modal Header */}
+                        <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Set Schedule</h2>
+                                    <p className="text-orange-100 text-sm">Configure class days and time</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowScheduleModal(false)}
+                                    className="p-2 text-white hover:bg-white hover:bg-opacity-20 rounded-xl transition-all duration-200"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            {/* Day Selector */}
+                            <div>
+                                <p className="text-sm font-semibold text-slate-700 mb-3">Select Days:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                                        <button
+                                            key={day}
+                                            type="button"
+                                            onClick={() => toggleDay(day)}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${scheduleData.days.includes(day)
+                                                ? 'bg-orange-500 text-white shadow-md'
+                                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                                }`}
+                                        >
+                                            {day}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Time Inputs */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-700 mb-2">Start Time:</p>
+                                    <input
+                                        type="time"
+                                        value={scheduleData.startTime}
+                                        onChange={(e) => setScheduleData(prev => ({ ...prev, startTime: e.target.value }))}
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-sm"
+                                    />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-700 mb-2">End Time:</p>
+                                    <input
+                                        type="time"
+                                        value={scheduleData.endTime}
+                                        onChange={(e) => setScheduleData(prev => ({ ...prev, endTime: e.target.value }))}
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-slate-800 text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Preview */}
+                            {formatScheduleString() && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                                    <p className="text-sm text-blue-700">
+                                        <strong>Preview:</strong> {formatScheduleString()}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Modal Actions */}
+                            <div className="flex items-center space-x-3 pt-4 border-t border-slate-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowScheduleModal(false)}
+                                    className="flex-1 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-all duration-200 font-medium text-sm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowScheduleModal(false)}
+                                    className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white px-4 py-2 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all duration-200 font-medium text-sm shadow-md hover:shadow-lg"
+                                >
+                                    Apply Schedule
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

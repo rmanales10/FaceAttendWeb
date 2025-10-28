@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { FileText, Download, Loader2, CheckCircle } from 'lucide-react';
 import { saveAs } from 'file-saver';
@@ -29,7 +29,7 @@ interface ClassAttendance {
         year_level: string;
     };
     attendance_records: AttendanceRecord[];
-    date?: any;
+    date?: Timestamp | string;
     attendance_date?: string;
     total_students: number;
     present_count: number;
@@ -38,7 +38,7 @@ interface ClassAttendance {
     subject?: string;
     section?: string;
     time?: string;
-    created_at?: any;
+    created_at?: Timestamp;
 }
 
 function ReportDownloadContent() {
@@ -89,11 +89,11 @@ function ReportDownloadContent() {
         }
     };
 
-    const formatDate = (date: any): string => {
+    const formatDate = (date: Timestamp | string | undefined): string => {
         if (!date) return 'N/A';
 
         try {
-            if (date.toDate && typeof date.toDate === 'function') {
+            if (date instanceof Timestamp) {
                 return date.toDate().toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',

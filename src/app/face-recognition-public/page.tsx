@@ -70,11 +70,11 @@ function FaceRecognitionContent() {
             console.error('Error loading models:', error);
             showToast('Failed to load face recognition models. Please ensure models are in /public/models folder.', 'error', 7000);
         }
-    }, []);
+    }, [showToast]);
 
     const fetchSchedules = useCallback(async () => {
         try {
-            const data = await classScheduleService.getClassSchedules();
+            await classScheduleService.getClassSchedules();
 
             if (attendanceIdFromUrl) {
                 const attendance = await classAttendanceService.getClassAttendanceById(attendanceIdFromUrl);
@@ -138,7 +138,7 @@ function FaceRecognitionContent() {
             window.removeEventListener('resize', handleOrientationChange);
             window.removeEventListener('orientationchange', handleOrientationChange);
         };
-    }, []);
+    }, [loadModels, fetchSchedules]);
 
     useEffect(() => {
         if (selectedSchedule) {

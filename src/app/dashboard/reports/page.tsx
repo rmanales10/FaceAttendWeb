@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { studentService, Student } from '@/lib/firestore';
 import { collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle } from 'lucide-react';
@@ -100,7 +99,7 @@ export default function ReportsPage() {
                 });
             }
             return 'N/A';
-        } catch (error) {
+        } catch {
             return 'N/A';
         }
     };

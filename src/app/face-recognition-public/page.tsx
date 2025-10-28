@@ -395,43 +395,55 @@ function FaceRecognitionContent() {
                 status: record.status,
                 timestamp: record.timestamp,
                 attendance_type: 'face' as const,
-                confidence: record.confidence
+                confidence: record.confidence || 0
             }));
 
             if (attendanceId && attendanceData) {
-                await classAttendanceService.updateClassAttendance(attendanceId, {
+                // Clean update object - only include defined values
+                const updateData: Partial<ClassAttendance> = {
                     attendance_records: formattedRecords,
-                    absent_count: stats.absent,
-                    present_count: stats.present,
-                    late_count: stats.late,
-                    total_students: stats.total,
-                });
+                    absent_count: stats.absent || 0,
+                    present_count: stats.present || 0,
+                    late_count: stats.late || 0,
+                    total_students: stats.total || 0
+                };
+
+                await classAttendanceService.updateClassAttendance(attendanceId, updateData);
 
                 alert('Attendance updated successfully via face recognition!');
                 console.log('Attendance updated for ID:', attendanceId);
+                
+                // Close the webview/page - this will navigate back to Flutter
+                window.close();
+                // If window.close() doesn't work (some browsers block it), try going back
+                setTimeout(() => {
+                    if (window.history.length > 1) {
+                        window.history.back();
+                    }
+                }, 500);
                 return;
             }
 
             const classAttendanceData: Omit<ClassAttendance, 'id'> = {
                 class_schedule: {
-                    building_room: selectedSchedule.building_room,
-                    course_code: selectedSchedule.course_code,
-                    course_year: selectedSchedule.course_year,
-                    department: selectedSchedule.department,
-                    schedule: selectedSchedule.schedule,
+                    building_room: selectedSchedule.building_room || '',
+                    course_code: selectedSchedule.course_code || '',
+                    course_year: selectedSchedule.course_year || '',
+                    department: selectedSchedule.department || '',
+                    schedule: selectedSchedule.schedule || '',
                     subject_id: selectedSchedule.subject_id || selectedSchedule.id || '',
-                    subject_name: selectedSchedule.subject_name,
-                    teacher_id: selectedSchedule.teacher_id,
-                    teacher_name: selectedSchedule.teacher_name,
-                    year_level: selectedSchedule.year_level
+                    subject_name: selectedSchedule.subject_name || '',
+                    teacher_id: selectedSchedule.teacher_id || '',
+                    teacher_name: selectedSchedule.teacher_name || '',
+                    year_level: selectedSchedule.year_level || ''
                 },
                 attendance_records: formattedRecords,
-                absent_count: stats.absent,
-                present_count: stats.present,
-                late_count: stats.late,
-                total_students: stats.total,
+                absent_count: stats.absent || 0,
+                present_count: stats.present || 0,
+                late_count: stats.late || 0,
+                total_students: stats.total || 0,
                 attendance_date: attendanceDate,
-                created_by: selectedSchedule.teacher_id
+                created_by: selectedSchedule.teacher_id || ''
             };
 
             const docId = await classAttendanceService.addClassAttendance(classAttendanceData);
@@ -440,10 +452,19 @@ function FaceRecognitionContent() {
                 `✅ Attendance saved successfully!\n\n` +
                 `📅 Date: ${attendanceDate}\n` +
                 `📚 Subject: ${selectedSchedule.subject_name}\n` +
-                `✓ Present: ${stats.present}\n` +
-                `✗ Absent: ${stats.absent}\n` +
+                `✓ Present: ${stats.present || 0}\n` +
+                `✗ Absent: ${stats.absent || 0}\n` +
                 `Document ID: ${docId}`
             );
+            
+            // Close the webview/page - this will navigate back to Flutter
+            window.close();
+            // If window.close() doesn't work (some browsers block it), try going back
+            setTimeout(() => {
+                if (window.history.length > 1) {
+                    window.history.back();
+                }
+            }, 500);
         } catch (error) {
             console.error('Error saving attendance:', error);
             alert('❌ Failed to save attendance. ' + (error as Error).message);

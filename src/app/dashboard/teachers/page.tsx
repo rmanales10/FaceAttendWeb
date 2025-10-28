@@ -167,17 +167,17 @@ export default function TeachersPage() {
 
     if (loading) {
         return (
-            <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+            <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
                 <div className="animate-pulse">
-                    <div className="h-8 bg-slate-200 rounded-2xl w-1/4 mb-6"></div>
-                    <div className="space-y-4">
+                    <div className="h-6 sm:h-8 bg-slate-200 rounded-2xl w-2/3 sm:w-1/4 mb-4 sm:mb-6"></div>
+                    <div className="space-y-3 sm:space-y-4">
                         {[...Array(5)].map((_, i) => (
-                            <div key={i} className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-12 h-12 bg-slate-200 rounded-full"></div>
-                                    <div className="flex-1">
-                                        <div className="h-4 bg-slate-200 rounded-xl w-1/3 mb-2"></div>
-                                        <div className="h-3 bg-slate-200 rounded-xl w-1/2"></div>
+                            <div key={i} className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
+                                <div className="flex items-center space-x-3 sm:space-x-4">
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-200 rounded-full flex-shrink-0"></div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="h-3 sm:h-4 bg-slate-200 rounded-xl w-2/3 sm:w-1/3 mb-2"></div>
+                                        <div className="h-2.5 sm:h-3 bg-slate-200 rounded-xl w-full sm:w-1/2"></div>
                                     </div>
                                 </div>
                             </div>
@@ -189,34 +189,32 @@ export default function TeachersPage() {
     }
 
     return (
-        <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+        <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
             {/* Header */}
-            <div className="mb-8">
-                <div className="flex items-center justify-between">
+            <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2">Teachers Management</h1>
-                        <p className="text-slate-600">Track and manage teacher records from users collection</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1 sm:mb-2">Teachers Management</h1>
+                        <p className="text-sm sm:text-base text-slate-600">Track and manage teacher records from users collection</p>
                     </div>
-                    <div className="flex items-center space-x-4">
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-6 py-3 rounded-2xl border border-green-100">
-                            <span className="text-slate-700 font-semibold">
-                                Total Teachers: {teachers.length}
-                            </span>
-                        </div>
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-green-100 text-center sm:text-left">
+                        <span className="text-slate-700 font-semibold text-sm sm:text-base">
+                            Total Teachers: {teachers.length}
+                        </span>
                     </div>
                 </div>
             </div>
 
             {/* Search */}
-            <div className="mb-8">
-                <div className="relative max-w-lg">
-                    <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <div className="mb-6 sm:mb-8">
+                <div className="relative max-w-full sm:max-w-lg">
+                    <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
                     <input
                         type="text"
-                        placeholder="Search teachers by name, email, or department..."
+                        placeholder="Search teachers..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200 text-slate-800 placeholder-slate-400"
+                        className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm sm:text-base"
                     />
                 </div>
             </div>

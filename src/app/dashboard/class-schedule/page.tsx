@@ -474,17 +474,17 @@ export default function ClassSchedulePage() {
 
     if (loading) {
         return (
-            <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+            <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
                 <div className="animate-pulse">
-                    <div className="h-8 bg-slate-200 rounded-2xl w-1/4 mb-6"></div>
-                    <div className="space-y-4">
+                    <div className="h-6 sm:h-8 bg-slate-200 rounded-2xl w-2/3 sm:w-1/4 mb-4 sm:mb-6"></div>
+                    <div className="space-y-3 sm:space-y-4">
                         {[...Array(5)].map((_, i) => (
-                            <div key={i} className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-12 h-12 bg-slate-200 rounded-full"></div>
-                                    <div className="flex-1">
-                                        <div className="h-4 bg-slate-200 rounded-xl w-1/3 mb-2"></div>
-                                        <div className="h-3 bg-slate-200 rounded-xl w-1/2"></div>
+                            <div key={i} className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-100">
+                                <div className="flex items-center space-x-3 sm:space-x-4">
+                                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-slate-200 rounded-full flex-shrink-0"></div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="h-3 sm:h-4 bg-slate-200 rounded-xl w-2/3 sm:w-1/3 mb-2"></div>
+                                        <div className="h-2.5 sm:h-3 bg-slate-200 rounded-xl w-full sm:w-1/2"></div>
                                     </div>
                                 </div>
                             </div>
@@ -496,26 +496,26 @@ export default function ClassSchedulePage() {
     }
 
     return (
-        <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+        <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
             {/* Header */}
-            <div className="mb-8">
-                <div className="flex items-center justify-between">
+            <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2">Class Schedule Management</h1>
-                        <p className="text-slate-600">Assign teachers to subjects with schedules and locations</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1 sm:mb-2">Class Schedule Management</h1>
+                        <p className="text-sm sm:text-base text-slate-600">Assign teachers to subjects with schedules and locations</p>
                     </div>
-                    <div className="flex items-center space-x-4">
-                        <div className="bg-gradient-to-r from-purple-50 to-violet-50 px-6 py-3 rounded-2xl border border-purple-100">
-                            <span className="text-slate-700 font-semibold">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+                        <div className="bg-gradient-to-r from-purple-50 to-violet-50 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-purple-100 text-center sm:text-left">
+                            <span className="text-slate-700 font-semibold text-sm sm:text-base">
                                 Total Schedules: {classSchedules.length}
                             </span>
                         </div>
                         <button
                             onClick={() => setShowAddModal(true)}
-                            className="bg-gradient-to-r from-purple-500 to-violet-600 text-white px-6 py-3 rounded-2xl hover:from-purple-600 hover:to-violet-700 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl"
+                            className="bg-gradient-to-r from-purple-500 to-violet-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl hover:from-purple-600 hover:to-violet-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
                         >
                             <Plus className="w-5 h-5" />
-                            <span className="font-medium">Add New Schedule</span>
+                            <span className="font-medium text-sm sm:text-base">Add New Schedule</span>
                         </button>
                     </div>
                 </div>

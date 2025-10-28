@@ -251,24 +251,24 @@ export default function SubjectsPage() {
 
     if (loading) {
         return (
-            <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+            <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
                 <div className="animate-pulse">
-                    <div className="h-8 bg-slate-200 rounded-2xl w-1/4 mb-6"></div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="h-6 sm:h-8 bg-slate-200 rounded-2xl w-2/3 sm:w-1/4 mb-4 sm:mb-6"></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                         {[...Array(6)].map((_, i) => (
-                            <div key={i} className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                            <div key={i} className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
                                 <div className="text-center">
-                                    <div className="w-20 h-20 bg-slate-200 rounded-2xl mx-auto mb-6"></div>
-                                    <div className="h-6 bg-slate-200 rounded-xl w-3/4 mx-auto mb-4"></div>
-                                    <div className="space-y-3 mb-6">
-                                        <div className="h-4 bg-slate-200 rounded-xl w-1/2 mx-auto"></div>
-                                        <div className="h-4 bg-slate-200 rounded-xl w-2/3 mx-auto"></div>
-                                        <div className="h-4 bg-slate-200 rounded-xl w-1/3 mx-auto"></div>
+                                    <div className="w-16 h-16 sm:w-20 sm:h-20 bg-slate-200 rounded-xl sm:rounded-2xl mx-auto mb-4 sm:mb-6"></div>
+                                    <div className="h-5 sm:h-6 bg-slate-200 rounded-xl w-3/4 mx-auto mb-3 sm:mb-4"></div>
+                                    <div className="space-y-2 sm:space-y-3 mb-4 sm:mb-6">
+                                        <div className="h-3 sm:h-4 bg-slate-200 rounded-xl w-1/2 mx-auto"></div>
+                                        <div className="h-3 sm:h-4 bg-slate-200 rounded-xl w-2/3 mx-auto"></div>
+                                        <div className="h-3 sm:h-4 bg-slate-200 rounded-xl w-1/3 mx-auto"></div>
                                     </div>
-                                    <div className="flex justify-center space-x-3">
-                                        <div className="w-10 h-10 bg-slate-200 rounded-xl"></div>
-                                        <div className="w-10 h-10 bg-slate-200 rounded-xl"></div>
-                                        <div className="w-10 h-10 bg-slate-200 rounded-xl"></div>
+                                    <div className="flex justify-center space-x-2 sm:space-x-3">
+                                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 rounded-lg sm:rounded-xl"></div>
+                                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 rounded-lg sm:rounded-xl"></div>
+                                        <div className="w-8 h-8 sm:w-10 sm:h-10 bg-slate-200 rounded-lg sm:rounded-xl"></div>
                                     </div>
                                 </div>
                             </div>
@@ -280,26 +280,26 @@ export default function SubjectsPage() {
     }
 
     return (
-        <div className="p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
+        <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
             {/* Header */}
-            <div className="mb-8">
-                <div className="flex items-center justify-between">
+            <div className="mb-6 sm:mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold text-slate-800 mb-2">Subjects Management</h1>
-                        <p className="text-slate-600">Track and manage subject records</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1 sm:mb-2">Subjects Management</h1>
+                        <p className="text-sm sm:text-base text-slate-600">Track and manage subject records</p>
                     </div>
-                    <div className="flex items-center space-x-4">
-                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-3 rounded-2xl border border-blue-100">
-                            <span className="text-slate-700 font-semibold">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-blue-100 text-center sm:text-left">
+                            <span className="text-slate-700 font-semibold text-sm sm:text-base">
                                 Total Subjects: {subjects.length}
                             </span>
                         </div>
                         <button
                             onClick={() => setShowAddModal(true)}
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center space-x-2 shadow-lg hover:shadow-xl"
+                            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
                         >
                             <Plus className="w-5 h-5" />
-                            <span className="font-medium">Add New Subject</span>
+                            <span className="font-medium text-sm sm:text-base">Add New Subject</span>
                         </button>
                     </div>
                 </div>

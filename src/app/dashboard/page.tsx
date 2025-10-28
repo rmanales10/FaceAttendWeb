@@ -88,8 +88,7 @@ export default function DashboardPage() {
             await activityLogService.addActivityLog({
                 action: 'Holiday Added',
                 user: 'Admin',
-                details: `Added holiday: ${newHoliday.name} on ${new Date(newHoliday.date).toLocaleDateString()}`,
-                timestamp: {} as any
+                details: `Added holiday: ${newHoliday.name} on ${new Date(newHoliday.date).toLocaleDateString()}`
             });
             setNewHoliday({ name: '', date: '', color: '#3b82f6' });
             setShowHolidayForm(false);
@@ -115,8 +114,7 @@ export default function DashboardPage() {
                     await activityLogService.addActivityLog({
                         action: 'Holiday Deleted',
                         user: 'Admin',
-                        details: `Deleted holiday: ${holidayName}`,
-                        timestamp: {} as any
+                        details: `Deleted holiday: ${holidayName}`
                     });
                     await fetchData();
                     closeConfirmModal();

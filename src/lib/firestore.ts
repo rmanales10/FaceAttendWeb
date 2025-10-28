@@ -284,7 +284,7 @@ export const activityLogService = {
         })) as ActivityLog[];
     },
 
-    async addActivityLog(log: Omit<ActivityLog, 'id'>): Promise<void> {
+    async addActivityLog(log: Omit<ActivityLog, 'id' | 'timestamp'>): Promise<void> {
         await addDoc(collection(db, 'activity_logs'), {
             ...log,
             timestamp: Timestamp.now()

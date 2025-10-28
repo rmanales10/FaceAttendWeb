@@ -376,7 +376,6 @@ export const classAttendanceService = {
     },
 
     async getClassAttendanceById(id: string): Promise<ClassAttendance | null> {
-        const docRef = doc(db, 'classAttendance', id);
         const docSnap = await getDocs(
             query(collection(db, 'classAttendance'), where('__name__', '==', id))
         );

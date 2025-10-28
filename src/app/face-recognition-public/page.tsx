@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
     classScheduleService,
@@ -14,9 +14,6 @@ import {
 import * as faceapi from 'face-api.js';
 import {
     ScanFace,
-    Calendar,
-    Clock,
-    MapPin,
     Users,
     CheckCircle,
     XCircle,
@@ -35,14 +32,13 @@ interface AttendanceRecord {
     confidence?: number;
 }
 
-export default function FaceRecognitionPublicPage() {
+function FaceRecognitionContent() {
     const searchParams = useSearchParams();
     const attendanceIdFromUrl = searchParams.get('attendanceId');
     const autoStart = searchParams.get('autostart') === 'true';
 
     const [attendanceId, setAttendanceId] = useState<string | null>(null);
     const [attendanceData, setAttendanceData] = useState<ClassAttendance | null>(null);
-    const [schedules, setSchedules] = useState<ClassSchedule[]>([]);
     const [selectedSchedule, setSelectedSchedule] = useState<ClassSchedule | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [labeledDescriptors, setLabeledDescriptors] = useState<faceapi.LabeledFaceDescriptors[]>([]);
@@ -54,10 +50,60 @@ export default function FaceRecognitionPublicPage() {
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
     const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
     const [isLandscape, setIsLandscape] = useState(false);
-    const [fromUrl, setFromUrl] = useState(false);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const detectionInterval = useRef<NodeJS.Timeout | null>(null);
+
+    const loadModels = useCallback(async () => {
+        try {
+            const MODEL_URL = '/models';
+            await Promise.all([
+                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+            ]);
+            setModelsLoaded(true);
+            console.log('Face-api.js models loaded successfully');
+        } catch (error) {
+            console.error('Error loading models:', error);
+            alert('Failed to load face recognition models.');
+        }
+    }, []);
+
+    const fetchSchedules = useCallback(async () => {
+        try {
+            const data = await classScheduleService.getClassSchedules();
+
+            if (attendanceIdFromUrl) {
+                const attendance = await classAttendanceService.getClassAttendanceById(attendanceIdFromUrl);
+                if (attendance) {
+                    setAttendanceId(attendanceIdFromUrl);
+                    setAttendanceData(attendance);
+
+                    const scheduleFromAttendance: ClassSchedule = {
+                        id: attendanceIdFromUrl,
+                        teacher_id: attendance.class_schedule.teacher_id,
+                        teacher_name: attendance.class_schedule.teacher_name,
+                        subject_id: attendance.class_schedule.subject_id,
+                        subject_name: attendance.class_schedule.subject_name,
+                        course_code: attendance.class_schedule.course_code,
+                        department: attendance.class_schedule.department,
+                        year_level: attendance.class_schedule.year_level,
+                        course_year: attendance.class_schedule.course_year,
+                        schedule: attendance.class_schedule.schedule,
+                        building_room: attendance.class_schedule.building_room,
+                    };
+
+                    setSelectedSchedule(scheduleFromAttendance);
+                    console.log('Auto-selected schedule from attendance:', scheduleFromAttendance.subject_name);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching schedules:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [attendanceIdFromUrl]);
 
     useEffect(() => {
         const init = async () => {
@@ -96,6 +142,7 @@ export default function FaceRecognitionPublicPage() {
         if (selectedSchedule) {
             fetchStudentsForSchedule();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSchedule]);
 
     useEffect(() => {
@@ -105,60 +152,8 @@ export default function FaceRecognitionPublicPage() {
             }, 1000);
             return () => clearTimeout(timer);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [autoStart, selectedSchedule, modelsLoaded, isScanning, students.length]);
-
-    const loadModels = async () => {
-        try {
-            const MODEL_URL = '/models';
-            await Promise.all([
-                faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-            ]);
-            setModelsLoaded(true);
-            console.log('Face-api.js models loaded successfully');
-        } catch (error) {
-            console.error('Error loading models:', error);
-            alert('Failed to load face recognition models.');
-        }
-    };
-
-    const fetchSchedules = async () => {
-        try {
-            const data = await classScheduleService.getClassSchedules();
-            setSchedules(data);
-
-            if (attendanceIdFromUrl) {
-                const attendance = await classAttendanceService.getClassAttendanceById(attendanceIdFromUrl);
-                if (attendance) {
-                    setAttendanceId(attendanceIdFromUrl);
-                    setAttendanceData(attendance);
-                    setFromUrl(true);
-
-                    const scheduleFromAttendance: ClassSchedule = {
-                        id: attendanceIdFromUrl,
-                        teacher_id: attendance.class_schedule.teacher_id,
-                        teacher_name: attendance.class_schedule.teacher_name,
-                        subject_id: attendance.class_schedule.subject_id,
-                        subject_name: attendance.class_schedule.subject_name,
-                        course_code: attendance.class_schedule.course_code,
-                        department: attendance.class_schedule.department,
-                        year_level: attendance.class_schedule.year_level,
-                        course_year: attendance.class_schedule.course_year,
-                        schedule: attendance.class_schedule.schedule,
-                        building_room: attendance.class_schedule.building_room,
-                    };
-
-                    setSelectedSchedule(scheduleFromAttendance);
-                    console.log('Auto-selected schedule from attendance:', scheduleFromAttendance.subject_name);
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching schedules:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const fetchStudentsForSchedule = useCallback(async () => {
         if (!selectedSchedule) return;
@@ -359,6 +354,7 @@ export default function FaceRecognitionPublicPage() {
                 detectFaces();
             }, 100);
         }, 1000);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedSchedule, modelsLoaded, labeledDescriptors.length]);
 
     const handleStopScanning = () => {
@@ -663,6 +659,23 @@ export default function FaceRecognitionPublicPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function FaceRecognitionPublicPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+                    <div className="text-center">
+                        <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mx-auto mb-4" />
+                        <p className="text-slate-600 font-medium text-lg">Loading...</p>
+                    </div>
+                </div>
+            }
+        >
+            <FaceRecognitionContent />
+        </Suspense>
     );
 }
 

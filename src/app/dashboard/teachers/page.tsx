@@ -455,7 +455,7 @@ export default function TeachersPage() {
                                             name="full_name"
                                             value={formData.full_name}
                                             onChange={handleInputChange}
-                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-20 focus:border-blue-500 focus:bg-white transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm"
+                                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm hover:border-blue-400"
                                             placeholder="Enter teacher's full name"
                                             required
                                         />
@@ -475,7 +475,7 @@ export default function TeachersPage() {
                                             name="email"
                                             value={formData.email}
                                             onChange={handleInputChange}
-                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-20 focus:border-emerald-500 focus:bg-white transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm"
+                                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm hover:border-emerald-400"
                                             placeholder="Enter teacher's email"
                                             required
                                         />
@@ -494,7 +494,7 @@ export default function TeachersPage() {
                                             name="department"
                                             value={formData.department}
                                             onChange={handleInputChange}
-                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 focus:border-purple-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer hover:border-purple-400"
                                             required
                                         >
                                             <option value="">Select Department</option>

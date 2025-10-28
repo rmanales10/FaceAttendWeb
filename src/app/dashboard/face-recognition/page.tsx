@@ -3,8 +3,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-    classScheduleService,
-    ClassSchedule,
     studentService,
     Student,
     classAttendanceService,
@@ -16,7 +14,6 @@ import {
     ScanFace,
     Calendar,
     Clock,
-    MapPin,
     Users,
     CheckCircle,
     XCircle,

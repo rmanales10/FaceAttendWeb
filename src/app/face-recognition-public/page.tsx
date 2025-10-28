@@ -412,7 +412,7 @@ function FaceRecognitionContent() {
 
                 alert('Attendance updated successfully via face recognition!');
                 console.log('Attendance updated for ID:', attendanceId);
-                
+
                 // Close the webview/page - this will navigate back to Flutter
                 window.close();
                 // If window.close() doesn't work (some browsers block it), try going back
@@ -456,7 +456,7 @@ function FaceRecognitionContent() {
                 `✗ Absent: ${stats.absent || 0}\n` +
                 `Document ID: ${docId}`
             );
-            
+
             // Close the webview/page - this will navigate back to Flutter
             window.close();
             // If window.close() doesn't work (some browsers block it), try going back

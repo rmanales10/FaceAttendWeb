@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { studentService, Student, subjectService, Subject } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import {
@@ -51,6 +51,7 @@ export default function StudentsPage() {
 
     useEffect(() => {
         filterStudents();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [students, searchQuery, departmentFilter, yearLevelFilter, blockFilter]);
 
     const fetchStudents = async () => {
@@ -167,7 +168,7 @@ export default function StudentsPage() {
         setBlockFilter('');
     };
 
-    const filterStudents = () => {
+    const filterStudents = useCallback(() => {
         let filtered = students;
 
         // Apply search filter
@@ -196,7 +197,7 @@ export default function StudentsPage() {
         }
 
         setFilteredStudents(filtered);
-    };
+    }, [students, searchQuery, departmentFilter, yearLevelFilter, blockFilter]);
 
     const handleViewStudent = (student: Student) => {
         setStudentToView(student);

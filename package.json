@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "face-api.js": "^0.22.2",
     "firebase": "^12.3.0",
     "firebase-admin": "^13.5.0",
     "framer-motion": "^12.23.22",

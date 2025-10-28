@@ -37,7 +37,9 @@ export interface Student {
     subject?: string[];
     section_year_block?: string;
     face_trained?: boolean;
+    face_descriptors?: number[]; // Face embedding for recognition
     training_date?: string;
+    training_images_count?: number;
     accuracy?: number;
     created_at?: Timestamp;
     updated_at?: Timestamp;
@@ -80,6 +82,39 @@ export interface ClassSchedule {
     updated_at?: Timestamp;
 }
 
+export interface AttendanceRecord {
+    student_id: string;
+    student_name: string;
+    status: 'present' | 'absent' | 'late';
+    timestamp: Date;
+    attendance_type: 'face' | 'manual'; // Distinguish between face recognition and manual entry
+    confidence?: number; // Face recognition confidence (only for face type)
+}
+
+export interface ClassAttendance {
+    id?: string;
+    class_schedule: {
+        building_room: string;
+        course_code: string;
+        course_year: string;
+        department: string;
+        schedule: string;
+        subject_id: string;
+        subject_name: string;
+        teacher_id: string;
+        teacher_name: string;
+        year_level: string;
+    };
+    attendance_records: AttendanceRecord[];
+    absent_count: number;
+    present_count: number;
+    late_count: number;
+    total_students: number;
+    created_at?: Timestamp;
+    created_by?: string; // User ID who created the attendance
+    attendance_date: string; // Date in YYYY-MM-DD format
+}
+
 export interface Holiday {
     id?: string;
     name: string;
@@ -104,6 +139,11 @@ export const studentService = {
             id: doc.id,
             ...doc.data()
         })) as Student[];
+    },
+
+    // Alias for getAllStudents
+    async getStudents(): Promise<Student[]> {
+        return this.getAllStudents();
     },
 
     async addStudent(student: Omit<Student, 'id'>): Promise<void> {
@@ -298,6 +338,11 @@ export const classScheduleService = {
         })) as ClassSchedule[];
     },
 
+    // Alias for getAllClassSchedules
+    async getClassSchedules(): Promise<ClassSchedule[]> {
+        return this.getAllClassSchedules();
+    },
+
     async addClassSchedule(classSchedule: Omit<ClassSchedule, 'id'>): Promise<void> {
         await addDoc(collection(db, 'classSchedules'), {
             ...classSchedule,
@@ -315,6 +360,63 @@ export const classScheduleService = {
 
     async deleteClassSchedule(id: string): Promise<void> {
         await deleteDoc(doc(db, 'classSchedules', id));
+    }
+};
+
+// Class Attendance service
+export const classAttendanceService = {
+    async getAllClassAttendance(): Promise<ClassAttendance[]> {
+        const querySnapshot = await getDocs(
+            query(collection(db, 'classAttendance'), orderBy('created_at', 'desc'))
+        );
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as ClassAttendance[];
+    },
+
+    async getClassAttendanceByScheduleId(scheduleId: string): Promise<ClassAttendance[]> {
+        const querySnapshot = await getDocs(
+            query(
+                collection(db, 'classAttendance'),
+                where('class_schedule.subject_id', '==', scheduleId),
+                orderBy('created_at', 'desc')
+            )
+        );
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as ClassAttendance[];
+    },
+
+    async getClassAttendanceByDate(date: string): Promise<ClassAttendance[]> {
+        const querySnapshot = await getDocs(
+            query(
+                collection(db, 'classAttendance'),
+                where('attendance_date', '==', date),
+                orderBy('created_at', 'desc')
+            )
+        );
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as ClassAttendance[];
+    },
+
+    async addClassAttendance(attendance: Omit<ClassAttendance, 'id'>): Promise<string> {
+        const docRef = await addDoc(collection(db, 'classAttendance'), {
+            ...attendance,
+            created_at: serverTimestamp()
+        });
+        return docRef.id;
+    },
+
+    async updateClassAttendance(id: string, attendance: Partial<ClassAttendance>): Promise<void> {
+        await updateDoc(doc(db, 'classAttendance', id), attendance);
+    },
+
+    async deleteClassAttendance(id: string): Promise<void> {
+        await deleteDoc(doc(db, 'classAttendance', id));
     }
 };
 

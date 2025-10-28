@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { classScheduleService, ClassSchedule, userService, Teacher, subjectService, Subject, studentService, Student } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import {
@@ -16,8 +16,7 @@ import {
     BookOpen,
     GraduationCap,
     X,
-    Save,
-    Filter
+    Save
 } from 'lucide-react';
 
 export default function ClassSchedulePage() {
@@ -66,6 +65,7 @@ export default function ClassSchedulePage() {
 
     useEffect(() => {
         filterSchedules();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [classSchedules, searchQuery, departmentFilter, yearLevelFilter]);
 
     const fetchData = async () => {
@@ -88,7 +88,7 @@ export default function ClassSchedulePage() {
         }
     };
 
-    const filterSchedules = () => {
+    const filterSchedules = useCallback(() => {
         let filtered = classSchedules;
 
         // Apply search filter
@@ -116,7 +116,7 @@ export default function ClassSchedulePage() {
         }
 
         setFilteredSchedules(filtered);
-    };
+    }, [classSchedules, searchQuery, departmentFilter, yearLevelFilter]);
 
     const clearFilters = () => {
         setSearchQuery('');

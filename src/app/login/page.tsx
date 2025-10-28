@@ -21,7 +21,7 @@ export default function LoginPage() {
         try {
             await login(email, password);
             router.push('/dashboard');
-        } catch (error: any) {
+        } catch (error) {
             setError('Invalid credentials. Use admin@gmail.com/admin to login.');
             console.error('Login error:', error);
         } finally {

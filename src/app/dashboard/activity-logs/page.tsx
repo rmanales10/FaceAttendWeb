@@ -1,14 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { activityLogService, ActivityLog } from '@/lib/firestore';
 import {
     Search,
     History,
     Clock,
     User,
-    Activity,
-    Filter
+    Activity
 } from 'lucide-react';
 
 export default function ActivityLogsPage() {
@@ -23,6 +22,7 @@ export default function ActivityLogsPage() {
 
     useEffect(() => {
         filterLogs();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [logs, searchQuery]);
 
     const fetchLogs = async () => {
@@ -37,7 +37,7 @@ export default function ActivityLogsPage() {
         }
     };
 
-    const filterLogs = () => {
+    const filterLogs = useCallback(() => {
         if (!searchQuery.trim()) {
             setFilteredLogs(logs);
             return;
@@ -49,11 +49,13 @@ export default function ActivityLogsPage() {
             log.details.toLowerCase().includes(searchQuery.toLowerCase())
         );
         setFilteredLogs(filtered);
-    };
+    }, [logs, searchQuery]);
 
-    const formatTimestamp = (timestamp: any) => {
+    const formatTimestamp = (timestamp: { toDate?: () => Date } | Date | string | null | undefined) => {
         if (!timestamp) return 'N/A';
-        const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+        const date = typeof timestamp === 'object' && timestamp && 'toDate' in timestamp && typeof timestamp.toDate === 'function'
+            ? timestamp.toDate()
+            : new Date(timestamp as string | Date);
         return date.toLocaleString();
     };
 
@@ -134,7 +136,9 @@ export default function ActivityLogsPage() {
                     />
                 </div>
                 <button className="bg-gradient-to-r from-slate-100 to-gray-100 text-slate-700 px-6 py-4 rounded-2xl hover:from-slate-200 hover:to-gray-200 transition-all duration-200 flex items-center space-x-3 shadow-sm hover:shadow-md">
-                    <Filter className="w-5 h-5" />
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
                     <span className="font-medium">Filter</span>
                 </button>
             </div>

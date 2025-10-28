@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { subjectService, Subject } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
@@ -14,8 +14,7 @@ import {
     Hash,
     GraduationCap,
     X,
-    Save,
-    Filter
+    Save
 } from 'lucide-react';
 
 export default function SubjectsPage() {
@@ -48,6 +47,7 @@ export default function SubjectsPage() {
 
     useEffect(() => {
         filterSubjects();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [subjects, searchQuery, departmentFilter, yearLevelFilter]);
 
     const fetchSubjects = async () => {
@@ -68,7 +68,7 @@ export default function SubjectsPage() {
         setYearLevelFilter('');
     };
 
-    const filterSubjects = () => {
+    const filterSubjects = useCallback(() => {
         let filtered = subjects;
 
         // Apply search filter
@@ -92,7 +92,7 @@ export default function SubjectsPage() {
         }
 
         setFilteredSubjects(filtered);
-    };
+    }, [subjects, searchQuery, departmentFilter, yearLevelFilter]);
 
     const handleViewSubject = (subject: Subject) => {
         setSubjectToView(subject);

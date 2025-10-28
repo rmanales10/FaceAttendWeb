@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { userService, Teacher } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import {
-    Plus,
     Search,
     Edit,
     Trash2,
@@ -12,7 +11,6 @@ import {
     Users,
     Mail,
     BookOpen,
-    GraduationCap,
     X,
     Save
 } from 'lucide-react';
@@ -42,6 +40,7 @@ export default function TeachersPage() {
 
     useEffect(() => {
         filterTeachers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [teachers, searchQuery]);
 
     const fetchTeachers = async () => {
@@ -56,7 +55,7 @@ export default function TeachersPage() {
         }
     };
 
-    const filterTeachers = () => {
+    const filterTeachers = useCallback(() => {
         if (!searchQuery.trim()) {
             setFilteredTeachers(teachers);
             return;
@@ -68,7 +67,7 @@ export default function TeachersPage() {
             teacher.department.toLowerCase().includes(searchQuery.toLowerCase())
         );
         setFilteredTeachers(filtered);
-    };
+    }, [teachers, searchQuery]);
 
     const handleDeleteTeacher = (teacher: Teacher) => {
         setTeacherToDelete(teacher);
@@ -260,6 +259,7 @@ export default function TeachersPage() {
                                             <div className="flex items-center space-x-4">
                                                 <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm overflow-hidden">
                                                     {teacher.base64image ? (
+                                                        /* eslint-disable-next-line @next/next/no-img-element */
                                                         <img
                                                             src={`data:image/jpeg;base64,${teacher.base64image}`}
                                                             alt={teacher.full_name}
@@ -353,6 +353,7 @@ export default function TeachersPage() {
                                 <div className="flex items-center space-x-4">
                                     <div className="w-16 h-16 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm overflow-hidden">
                                         {teacherToView.base64image ? (
+                                            /* eslint-disable-next-line @next/next/no-img-element */
                                             <img
                                                 src={`data:image/jpeg;base64,${teacherToView.base64image}`}
                                                 alt={teacherToView.full_name}

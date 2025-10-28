@@ -58,62 +58,8 @@ export default function FaceRecognitionPage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const detectionInterval = useRef<NodeJS.Timeout | null>(null);
 
-    useEffect(() => {
-        const init = async () => {
-            await loadModels();
-            await fetchSchedules();
-        };
-        init();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-
-        // Check initial orientation
-        const checkOrientation = () => {
-            if (typeof window !== 'undefined') {
-                const landscape = window.innerWidth > window.innerHeight;
-                setIsLandscape(landscape);
-            }
-        };
-
-        checkOrientation();
-
-        // Listen for orientation changes
-        const handleOrientationChange = () => {
-            checkOrientation();
-        };
-
-        window.addEventListener('resize', handleOrientationChange);
-        window.addEventListener('orientationchange', handleOrientationChange);
-
-        return () => {
-            if (detectionInterval.current) {
-                clearInterval(detectionInterval.current);
-            }
-            stopCamera();
-            window.removeEventListener('resize', handleOrientationChange);
-            window.removeEventListener('orientationchange', handleOrientationChange);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (selectedAttendance) {
-            fetchStudentsForSchedule();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedAttendance]);
-
-    // Auto-start scanning if autostart parameter is true and attendance is loaded
-    useEffect(() => {
-        if (autoStart && selectedAttendance && modelsLoaded && !isScanning && students.length > 0) {
-            // Small delay to ensure everything is ready
-            const timer = setTimeout(() => {
-                handleStartScanning();
-            }, 1000);
-            return () => clearTimeout(timer);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoStart, selectedAttendance, modelsLoaded, isScanning, students.length]);
-
-    const loadModels = async () => {
+    // Function declarations
+    const loadModels = useCallback(async () => {
         try {
             const MODEL_URL = '/models';
             await Promise.all([
@@ -127,9 +73,9 @@ export default function FaceRecognitionPage() {
             console.error('Error loading models:', error);
             showToast('Failed to load face recognition models. Please ensure models are in /public/models folder.', 'error', 7000);
         }
-    };
+    }, [showToast]);
 
-    const fetchSchedules = async () => {
+    const fetchSchedules = useCallback(async () => {
         try {
             // Fetch all classAttendance records instead of classSchedules
             const attendanceData = await classAttendanceService.getAllClassAttendance();
@@ -153,7 +99,7 @@ export default function FaceRecognitionPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [attendanceIdFromUrl]);
 
     const fetchStudentsForSchedule = useCallback(async () => {
         if (!selectedAttendance) return;
@@ -163,8 +109,6 @@ export default function FaceRecognitionPage() {
 
             // Filter students based on course_year from the attendance record's class_schedule
             const courseYear = selectedAttendance.class_schedule?.course_year || '';
-            const department = selectedAttendance.class_schedule?.department || '';
-            const yearLevel = selectedAttendance.class_schedule?.year_level || '';
 
             const filteredStudents = allStudents.filter(student => {
                 let studentSection = (student.section_year_block || '').trim().toUpperCase();
@@ -213,6 +157,60 @@ export default function FaceRecognitionPage() {
             console.error('Error fetching students:', error);
         }
     }, [selectedAttendance]);
+
+    // Effects
+    useEffect(() => {
+        const init = async () => {
+            await loadModels();
+            await fetchSchedules();
+        };
+        init();
+
+        // Check initial orientation
+        const checkOrientation = () => {
+            if (typeof window !== 'undefined') {
+                const landscape = window.innerWidth > window.innerHeight;
+                setIsLandscape(landscape);
+            }
+        };
+
+        checkOrientation();
+
+        // Listen for orientation changes
+        const handleOrientationChange = () => {
+            checkOrientation();
+        };
+
+        window.addEventListener('resize', handleOrientationChange);
+        window.addEventListener('orientationchange', handleOrientationChange);
+
+        return () => {
+            if (detectionInterval.current) {
+                clearInterval(detectionInterval.current);
+            }
+            stopCamera();
+            window.removeEventListener('resize', handleOrientationChange);
+            window.removeEventListener('orientationchange', handleOrientationChange);
+        };
+    }, [loadModels, fetchSchedules]);
+
+    useEffect(() => {
+        if (selectedAttendance) {
+            fetchStudentsForSchedule();
+        }
+    }, [selectedAttendance, fetchStudentsForSchedule]);
+
+    // Auto-start scanning if autostart parameter is true and attendance is loaded
+    useEffect(() => {
+        if (autoStart && selectedAttendance && modelsLoaded && !isScanning && students.length > 0) {
+            // Small delay to ensure everything is ready
+            const timer = setTimeout(() => {
+                handleStartScanning();
+            }, 1000);
+            return () => clearTimeout(timer);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [autoStart, selectedAttendance, modelsLoaded, isScanning, students.length]);
 
     const getCameras = async () => {
         try {

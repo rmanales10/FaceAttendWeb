@@ -297,8 +297,8 @@ function ReportDownloadContent() {
                     onClick={generateDOCX}
                     disabled={downloading}
                     className={`w-full py-4 rounded-xl font-bold text-white transition-all duration-200 flex items-center justify-center space-x-2 ${downloading
-                            ? 'bg-slate-400 cursor-not-allowed'
-                            : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl'
+                        ? 'bg-slate-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 shadow-lg hover:shadow-xl'
                         }`}
                 >
                     {downloading ? (

@@ -160,13 +160,33 @@ function FaceRecognitionContent() {
 
         try {
             const allStudents = await studentService.getAllStudents();
-            const filteredStudents = allStudents.filter(
-                student =>
-                    student.department === selectedSchedule.department &&
-                    student.year_level === selectedSchedule.year_level &&
-                    student.face_trained &&
-                    student.face_descriptors
-            );
+
+            // Filter students by exact section match (course_year)
+            const courseYear = selectedSchedule.course_year || '';
+
+            const filteredStudents = allStudents.filter(student => {
+                let studentSection = (student.section_year_block || '').trim().toUpperCase();
+                const targetCourseYear = courseYear.trim().toUpperCase();
+
+                // Generate section_year_block if missing (for old records)
+                if (!studentSection || studentSection === 'UNKNOWN') {
+                    const departmentCode = (student.department || '').split(' - ')[0].trim().toUpperCase();
+                    const yearNumber = (student.year_level || '').includes('1st') ? '1' :
+                        (student.year_level || '').includes('2nd') ? '2' :
+                            (student.year_level || '').includes('3rd') ? '3' : '4';
+                    const block = (student.block || '').trim().toUpperCase();
+                    studentSection = `${departmentCode} ${yearNumber}${block}`.trim();
+                }
+
+                // STRICT exact matching only - no partial matches
+                const matchesCourseYear = studentSection === targetCourseYear;
+                const isTrained = student.face_trained && student.face_descriptors;
+
+                console.log(`[Public] Student: ${student.full_name}, Section: "${studentSection}", Target: "${targetCourseYear}", Match: ${matchesCourseYear}`);
+
+                return matchesCourseYear && isTrained;
+            });
+
             setStudents(filteredStudents);
 
             const labeled = filteredStudents.map(student => {

@@ -23,6 +23,7 @@ import {
     Loader2,
     Save
 } from 'lucide-react';
+import { useToast } from '@/components/Toast/Toast';
 
 interface AttendanceRecord {
     student_id: string;
@@ -36,6 +37,7 @@ function FaceRecognitionContent() {
     const searchParams = useSearchParams();
     const attendanceIdFromUrl = searchParams.get('attendanceId');
     const autoStart = searchParams.get('autostart') === 'true';
+    const { showToast } = useToast();
 
     const [attendanceId, setAttendanceId] = useState<string | null>(null);
     const [attendanceData, setAttendanceData] = useState<ClassAttendance | null>(null);
@@ -66,7 +68,7 @@ function FaceRecognitionContent() {
             console.log('Face-api.js models loaded successfully');
         } catch (error) {
             console.error('Error loading models:', error);
-            alert('Failed to load face recognition models.');
+            showToast('Failed to load face recognition models. Please ensure models are in /public/models folder.', 'error', 7000);
         }
     }, []);
 
@@ -231,7 +233,7 @@ function FaceRecognitionContent() {
             setAvailableCameras(cameras);
         } catch (error) {
             console.error('Error accessing camera:', error);
-            alert('Could not access camera. Please check permissions.');
+            showToast('Could not access camera. Please check permissions.', 'error', 5000);
         }
     };
 
@@ -270,7 +272,7 @@ function FaceRecognitionContent() {
                 }
             } catch (error) {
                 console.error('Error switching camera:', error);
-                alert('Could not switch camera.');
+                showToast('Could not switch camera.', 'error', 4000);
             }
         }, 100);
     };
@@ -358,17 +360,17 @@ function FaceRecognitionContent() {
 
     const handleStartScanning = useCallback(async () => {
         if (!selectedSchedule) {
-            alert('Please select a class schedule first');
+            showToast('Please select a class schedule first', 'warning', 4000);
             return;
         }
 
         if (!modelsLoaded) {
-            alert('Face recognition models are still loading. Please wait...');
+            showToast('Face recognition models are still loading. Please wait...', 'info', 5000);
             return;
         }
 
         if (labeledDescriptors.length === 0) {
-            alert('No trained students found for this class. Please train students first.');
+            showToast('No trained students found for this class. Please train students first.', 'warning', 5000);
             return;
         }
 
@@ -400,12 +402,12 @@ function FaceRecognitionContent() {
 
     const saveAttendance = async () => {
         if (!selectedSchedule) {
-            alert('Please select a class schedule first.');
+            showToast('Please select a class schedule first.', 'warning', 4000);
             return;
         }
 
         if (attendanceRecords.length === 0) {
-            alert('No attendance records to save. Please start scanning first.');
+            showToast('No attendance records to save. Please start scanning first.', 'warning', 4000);
             return;
         }
 
@@ -436,7 +438,7 @@ function FaceRecognitionContent() {
 
                 await classAttendanceService.updateClassAttendance(attendanceId, updateData);
 
-                alert('Attendance updated successfully via face recognition!');
+                showToast('✅ Attendance updated successfully via face recognition!', 'success', 5000);
                 console.log('Attendance updated for ID:', attendanceId);
 
                 // Close the webview/page - this will navigate back to Flutter
@@ -474,14 +476,13 @@ function FaceRecognitionContent() {
 
             const docId = await classAttendanceService.addClassAttendance(classAttendanceData);
 
-            alert(
-                `✅ Attendance saved successfully!\n\n` +
-                `📅 Date: ${attendanceDate}\n` +
-                `📚 Subject: ${selectedSchedule.subject_name}\n` +
-                `✓ Present: ${stats.present || 0}\n` +
-                `✗ Absent: ${stats.absent || 0}\n` +
-                `Document ID: ${docId}`
+            showToast(
+                `✅ Attendance saved! Present: ${stats.present || 0}/${stats.total || 0} students`,
+                'success',
+                5000
             );
+            console.log('Attendance saved with ID:', docId);
+            console.log(`Date: ${attendanceDate}, Subject: ${selectedSchedule.subject_name}, Present: ${stats.present || 0}/${stats.total || 0}`);
 
             // Close the webview/page - this will navigate back to Flutter
             window.close();
@@ -493,7 +494,7 @@ function FaceRecognitionContent() {
             }, 500);
         } catch (error) {
             console.error('Error saving attendance:', error);
-            alert('❌ Failed to save attendance. ' + (error as Error).message);
+            showToast('❌ Failed to save attendance. ' + (error as Error).message, 'error', 6000);
         }
     };
 

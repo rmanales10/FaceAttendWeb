@@ -37,9 +37,11 @@ interface AttendanceRecord {
 
 export default function FaceRecognitionPage() {
     const searchParams = useSearchParams();
-    const scheduleIdFromUrl = searchParams.get('id');
+    const attendanceIdFromUrl = searchParams.get('attendanceId');
     const autoStart = searchParams.get('autostart') === 'true'; // Optional: auto-start scanning
 
+    const [attendanceId, setAttendanceId] = useState<string | null>(null);
+    const [attendanceData, setAttendanceData] = useState<ClassAttendance | null>(null);
     const [schedules, setSchedules] = useState<ClassSchedule[]>([]);
     const [selectedSchedule, setSelectedSchedule] = useState<ClassSchedule | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
@@ -52,7 +54,7 @@ export default function FaceRecognitionPage() {
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user'); // 'user' = front, 'environment' = rear
     const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
     const [isLandscape, setIsLandscape] = useState(false);
-    const [fromUrl, setFromUrl] = useState(false); // Track if schedule is from URL
+    const [fromUrl, setFromUrl] = useState(false); // Track if attendance is from URL
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const detectionInterval = useRef<NodeJS.Timeout | null>(null);
@@ -133,15 +135,33 @@ export default function FaceRecognitionPage() {
             const data = await classScheduleService.getClassSchedules();
             setSchedules(data);
 
-            // Auto-select schedule if ID is provided in URL
-            if (scheduleIdFromUrl && data.length > 0) {
-                const scheduleFromUrl = data.find(schedule => schedule.id === scheduleIdFromUrl);
-                if (scheduleFromUrl) {
-                    setSelectedSchedule(scheduleFromUrl);
+            // Load attendance data if attendanceId is provided in URL
+            if (attendanceIdFromUrl) {
+                const attendance = await classAttendanceService.getClassAttendanceById(attendanceIdFromUrl);
+                if (attendance) {
+                    setAttendanceId(attendanceIdFromUrl);
+                    setAttendanceData(attendance);
                     setFromUrl(true);
-                    console.log('Auto-selected schedule from URL:', scheduleFromUrl.subject_name);
+
+                    // Create a mock schedule object from attendance data
+                    const scheduleFromAttendance: ClassSchedule = {
+                        id: attendanceIdFromUrl,
+                        teacher_id: attendance.class_schedule.teacher_id,
+                        teacher_name: attendance.class_schedule.teacher_name,
+                        subject_id: attendance.class_schedule.subject_id,
+                        subject_name: attendance.class_schedule.subject_name,
+                        course_code: attendance.class_schedule.course_code,
+                        department: attendance.class_schedule.department,
+                        year_level: attendance.class_schedule.year_level,
+                        course_year: attendance.class_schedule.course_year,
+                        schedule: attendance.class_schedule.schedule,
+                        building_room: attendance.class_schedule.building_room,
+                    };
+
+                    setSelectedSchedule(scheduleFromAttendance);
+                    console.log('Auto-selected schedule from attendance:', scheduleFromAttendance.subject_name);
                 } else {
-                    console.warn('Schedule ID from URL not found:', scheduleIdFromUrl);
+                    console.warn('Attendance ID from URL not found:', attendanceIdFromUrl);
                 }
             }
         } catch (error) {
@@ -427,6 +447,23 @@ export default function FaceRecognitionPage() {
                 confidence: record.confidence
             }));
 
+            // Check if we're updating an existing attendance record
+            if (attendanceId && attendanceData) {
+                // Update existing attendance record
+                await classAttendanceService.updateClassAttendance(attendanceId, {
+                    attendance_records: formattedRecords,
+                    absent_count: stats.absent,
+                    present_count: stats.present,
+                    late_count: stats.late,
+                    total_students: stats.total,
+                });
+
+                alert('Attendance updated successfully via face recognition!');
+                console.log('Attendance updated for ID:', attendanceId);
+                return;
+            }
+
+            // Otherwise, create a new attendance document
             // Prepare class attendance document
             const classAttendanceData: Omit<ClassAttendance, 'id'> = {
                 class_schedule: {

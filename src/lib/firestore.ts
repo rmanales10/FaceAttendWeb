@@ -375,6 +375,17 @@ export const classAttendanceService = {
         })) as ClassAttendance[];
     },
 
+    async getClassAttendanceById(id: string): Promise<ClassAttendance | null> {
+        const docRef = doc(db, 'classAttendance', id);
+        const docSnap = await getDocs(
+            query(collection(db, 'classAttendance'), where('__name__', '==', id))
+        );
+        if (docSnap.empty) return null;
+
+        const docData = docSnap.docs[0];
+        return { id: docData.id, ...docData.data() } as ClassAttendance;
+    },
+
     async getClassAttendanceByScheduleId(scheduleId: string): Promise<ClassAttendance[]> {
         const querySnapshot = await getDocs(
             query(

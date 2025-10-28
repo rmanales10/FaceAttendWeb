@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { studentService, Student, subjectService, Subject } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
+import ConfirmModal from '@/components/ConfirmModal';
+import { useConfirmModal } from '@/hooks/useConfirmModal';
 import {
     Plus,
     Search,
@@ -18,6 +20,7 @@ import {
 } from 'lucide-react';
 
 export default function StudentsPage() {
+    const { modalState, showConfirmation, closeModal } = useConfirmModal();
     const [students, setStudents] = useState<Student[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -131,7 +134,14 @@ export default function StudentsPage() {
             });
         } catch (error) {
             console.error('Error adding student:', error);
-            alert('Error adding student. Please try again.');
+            showConfirmation(
+                'Error',
+                'Failed to add student. Please try again.',
+                () => closeModal(),
+                'danger',
+                'OK',
+                ''
+            );
         } finally {
             setIsSubmitting(false);
         }
@@ -168,7 +178,14 @@ export default function StudentsPage() {
             closeEditModal();
         } catch (error) {
             console.error('Error updating student:', error);
-            alert('Error updating student. Please try again.');
+            showConfirmation(
+                'Error',
+                'Failed to update student. Please try again.',
+                () => closeModal(),
+                'danger',
+                'OK',
+                ''
+            );
         } finally {
             setIsUpdating(false);
         }
@@ -1057,6 +1074,20 @@ export default function StudentsPage() {
                 isLoading={isDeleting}
                 confirmText="Delete Student"
                 cancelText="Cancel"
+            />
+
+            {/* Error/Info Modal */}
+            <ConfirmModal
+                isOpen={modalState.isOpen}
+                title={modalState.title}
+                message={modalState.message}
+                onConfirm={() => {
+                    modalState.onConfirm();
+                }}
+                onCancel={closeModal}
+                type={modalState.type}
+                confirmText={modalState.confirmText}
+                cancelText={modalState.cancelText}
             />
         </div>
     );

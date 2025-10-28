@@ -373,10 +373,15 @@ export default function FaceRecognitionPage() {
                     ctx.fillText(label, box.x + 5, box.y - 10);
                 }
 
-                // Mark attendance if match found
+                // Mark attendance only if confidence is 60% or above
                 if (bestMatch.label !== 'unknown') {
                     const confidence = 1 - bestMatch.distance;
-                    markAttendance(bestMatch.label, 'present', confidence);
+                    // Only mark attendance if confidence is at least 0.6 (60%)
+                    if (confidence >= 0.6) {
+                        markAttendance(bestMatch.label, 'present', confidence);
+                    } else {
+                        console.log(`Low confidence for ${bestMatch.label}: ${(confidence * 100).toFixed(1)}% - not marking attendance`);
+                    }
                 }
             });
         }

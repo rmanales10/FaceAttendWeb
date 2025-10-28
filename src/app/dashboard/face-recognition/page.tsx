@@ -26,6 +26,7 @@ import {
     Loader2,
     Save
 } from 'lucide-react';
+import { useToast } from '@/components/Toast/Toast';
 
 interface AttendanceRecord {
     student_id: string;
@@ -39,11 +40,12 @@ export default function FaceRecognitionPage() {
     const searchParams = useSearchParams();
     const attendanceIdFromUrl = searchParams.get('attendanceId');
     const autoStart = searchParams.get('autostart') === 'true'; // Optional: auto-start scanning
+    const { showToast } = useToast();
 
     const [attendanceId, setAttendanceId] = useState<string | null>(null);
     const [attendanceData, setAttendanceData] = useState<ClassAttendance | null>(null);
-    const [schedules, setSchedules] = useState<ClassSchedule[]>([]);
-    const [selectedSchedule, setSelectedSchedule] = useState<ClassSchedule | null>(null);
+    const [attendanceRecordsList, setAttendanceRecordsList] = useState<ClassAttendance[]>([]);
+    const [selectedAttendance, setSelectedAttendance] = useState<ClassAttendance | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [labeledDescriptors, setLabeledDescriptors] = useState<faceapi.LabeledFaceDescriptors[]>([]);
     const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -96,15 +98,15 @@ export default function FaceRecognitionPage() {
     }, []);
 
     useEffect(() => {
-        if (selectedSchedule) {
+        if (selectedAttendance) {
             fetchStudentsForSchedule();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedSchedule]);
+    }, [selectedAttendance]);
 
-    // Auto-start scanning if autostart parameter is true and schedule is loaded
+    // Auto-start scanning if autostart parameter is true and attendance is loaded
     useEffect(() => {
-        if (autoStart && selectedSchedule && modelsLoaded && !isScanning && students.length > 0) {
+        if (autoStart && selectedAttendance && modelsLoaded && !isScanning && students.length > 0) {
             // Small delay to ensure everything is ready
             const timer = setTimeout(() => {
                 handleStartScanning();
@@ -112,7 +114,7 @@ export default function FaceRecognitionPage() {
             return () => clearTimeout(timer);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoStart, selectedSchedule, modelsLoaded, isScanning, students.length]);
+    }, [autoStart, selectedAttendance, modelsLoaded, isScanning, students.length]);
 
     const loadModels = async () => {
         try {
@@ -126,40 +128,25 @@ export default function FaceRecognitionPage() {
             console.log('Face-api.js models loaded successfully');
         } catch (error) {
             console.error('Error loading models:', error);
-            alert('Failed to load face recognition models. Please ensure models are in /public/models folder.');
+            showToast('Failed to load face recognition models. Please ensure models are in /public/models folder.', 'error', 7000);
         }
     };
 
     const fetchSchedules = async () => {
         try {
-            const data = await classScheduleService.getClassSchedules();
-            setSchedules(data);
+            // Fetch all classAttendance records instead of classSchedules
+            const attendanceData = await classAttendanceService.getAllClassAttendance();
+            setAttendanceRecordsList(attendanceData);
 
             // Load attendance data if attendanceId is provided in URL
             if (attendanceIdFromUrl) {
-                const attendance = await classAttendanceService.getClassAttendanceById(attendanceIdFromUrl);
+                const attendance = attendanceData.find((a: ClassAttendance) => a.id === attendanceIdFromUrl);
                 if (attendance) {
                     setAttendanceId(attendanceIdFromUrl);
                     setAttendanceData(attendance);
+                    setSelectedAttendance(attendance);
                     setFromUrl(true);
-
-                    // Create a mock schedule object from attendance data
-                    const scheduleFromAttendance: ClassSchedule = {
-                        id: attendanceIdFromUrl,
-                        teacher_id: attendance.class_schedule.teacher_id,
-                        teacher_name: attendance.class_schedule.teacher_name,
-                        subject_id: attendance.class_schedule.subject_id,
-                        subject_name: attendance.class_schedule.subject_name,
-                        course_code: attendance.class_schedule.course_code,
-                        department: attendance.class_schedule.department,
-                        year_level: attendance.class_schedule.year_level,
-                        course_year: attendance.class_schedule.course_year,
-                        schedule: attendance.class_schedule.schedule,
-                        building_room: attendance.class_schedule.building_room,
-                    };
-
-                    setSelectedSchedule(scheduleFromAttendance);
-                    console.log('Auto-selected schedule from attendance:', scheduleFromAttendance.subject_name);
+                    console.log('Auto-selected attendance from URL:', attendance.class_schedule?.subject_name || 'N/A');
                 } else {
                     console.warn('Attendance ID from URL not found:', attendanceIdFromUrl);
                 }
@@ -172,18 +159,35 @@ export default function FaceRecognitionPage() {
     };
 
     const fetchStudentsForSchedule = useCallback(async () => {
-        if (!selectedSchedule) return;
+        if (!selectedAttendance) return;
 
         try {
             const allStudents = await studentService.getAllStudents();
-            // Filter students based on department and year level who have been trained
-            const filteredStudents = allStudents.filter(
-                student =>
-                    student.department === selectedSchedule.department &&
-                    student.year_level === selectedSchedule.year_level &&
-                    student.face_trained &&
-                    student.face_descriptors
-            );
+
+            // Filter students based on course_year from the attendance record's class_schedule
+            const courseYear = selectedAttendance.class_schedule?.course_year || '';
+            const department = selectedAttendance.class_schedule?.department || '';
+            const yearLevel = selectedAttendance.class_schedule?.year_level || '';
+
+            const filteredStudents = allStudents.filter(student => {
+                const studentSection = (student.section_year_block || '').trim().toUpperCase();
+                const targetCourseYear = courseYear.trim().toUpperCase();
+
+                // Strict matching: only include students whose section exactly matches the course_year
+                // This handles cases like "BSIT 4D" should only match "BSIT 4D", not "BSIT 4A"
+                const matchesCourseYear = studentSection === targetCourseYear ||
+                    studentSection.endsWith(targetCourseYear) ||
+                    targetCourseYear.endsWith(studentSection) ||
+                    (studentSection.length > 0 && targetCourseYear.length > 0 &&
+                        studentSection.replace(/[\s-]/g, '') === targetCourseYear.replace(/[\s-]/g, ''));
+
+                const matchesDepartment = !department || student.department === department;
+                const matchesYearLevel = !yearLevel || student.year_level === yearLevel;
+                const isTrained = student.face_trained && student.face_descriptors;
+
+                return matchesCourseYear && matchesDepartment && matchesYearLevel && isTrained;
+            });
+
             setStudents(filteredStudents);
 
             // Create labeled face descriptors for recognition
@@ -207,7 +211,7 @@ export default function FaceRecognitionPage() {
         } catch (error) {
             console.error('Error fetching students:', error);
         }
-    }, [selectedSchedule]);
+    }, [selectedAttendance]);
 
     const getCameras = async () => {
         try {
@@ -239,7 +243,7 @@ export default function FaceRecognitionPage() {
             await getCameras();
         } catch (error) {
             console.error('Error accessing camera:', error);
-            alert('Could not access camera. Please check permissions.');
+            showToast('Could not access camera. Please check permissions.', 'error');
         }
     };
 
@@ -281,7 +285,7 @@ export default function FaceRecognitionPage() {
                 }
             } catch (error) {
                 console.error('Error switching camera:', error);
-                alert('Could not switch camera.');
+                showToast('Could not switch camera.', 'error');
             }
         }, 100);
     };
@@ -375,18 +379,18 @@ export default function FaceRecognitionPage() {
     };
 
     const handleStartScanning = useCallback(async () => {
-        if (!selectedSchedule) {
-            alert('Please select a class schedule first');
+        if (!selectedAttendance) {
+            showToast('Please select an attendance record first', 'warning');
             return;
         }
 
         if (!modelsLoaded) {
-            alert('Face recognition models are still loading. Please wait...');
+            showToast('Face recognition models are still loading. Please wait...', 'info');
             return;
         }
 
         if (labeledDescriptors.length === 0) {
-            alert('No trained students found for this class. Please train students first.');
+            showToast('No trained students found for this class. Please train students first.', 'warning');
             return;
         }
 
@@ -401,7 +405,7 @@ export default function FaceRecognitionPage() {
             }, 100); // Detect every 100ms
         }, 1000);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedSchedule, modelsLoaded, labeledDescriptors.length]);
+    }, [selectedAttendance, modelsLoaded, labeledDescriptors.length]);
 
     const handleStopScanning = () => {
         setIsScanning(false);
@@ -419,13 +423,13 @@ export default function FaceRecognitionPage() {
     };
 
     const saveAttendance = async () => {
-        if (!selectedSchedule) {
-            alert('Please select a class schedule first.');
+        if (!selectedAttendance) {
+            showToast('Please select an attendance record first.', 'warning');
             return;
         }
 
         if (attendanceRecords.length === 0) {
-            alert('No attendance records to save. Please start scanning first.');
+            showToast('No attendance records to save. Please start scanning first.', 'warning');
             return;
         }
 
@@ -458,7 +462,7 @@ export default function FaceRecognitionPage() {
                     total_students: stats.total,
                 });
 
-                alert('Attendance updated successfully via face recognition!');
+                showToast('✅ Attendance updated successfully via face recognition!', 'success');
                 console.log('Attendance updated for ID:', attendanceId);
                 return;
             }
@@ -467,16 +471,16 @@ export default function FaceRecognitionPage() {
             // Prepare class attendance document
             const classAttendanceData: Omit<ClassAttendance, 'id'> = {
                 class_schedule: {
-                    building_room: selectedSchedule.building_room,
-                    course_code: selectedSchedule.course_code,
-                    course_year: selectedSchedule.course_year,
-                    department: selectedSchedule.department,
-                    schedule: selectedSchedule.schedule,
-                    subject_id: selectedSchedule.subject_id || selectedSchedule.id || '',
-                    subject_name: selectedSchedule.subject_name,
-                    teacher_id: selectedSchedule.teacher_id,
-                    teacher_name: selectedSchedule.teacher_name,
-                    year_level: selectedSchedule.year_level
+                    building_room: selectedAttendance.class_schedule?.building_room || '',
+                    course_code: selectedAttendance.class_schedule?.course_code || '',
+                    course_year: selectedAttendance.class_schedule?.course_year || '',
+                    department: selectedAttendance.class_schedule?.department || '',
+                    schedule: selectedAttendance.class_schedule?.schedule || '',
+                    subject_id: selectedAttendance.class_schedule?.subject_id || selectedAttendance.id || '',
+                    subject_name: selectedAttendance.class_schedule?.subject_name || '',
+                    teacher_id: selectedAttendance.class_schedule?.teacher_id || '',
+                    teacher_name: selectedAttendance.class_schedule?.teacher_name || '',
+                    year_level: selectedAttendance.class_schedule?.year_level || ''
                 },
                 attendance_records: formattedRecords,
                 absent_count: stats.absent,
@@ -484,22 +488,20 @@ export default function FaceRecognitionPage() {
                 late_count: stats.late,
                 total_students: stats.total,
                 attendance_date: attendanceDate,
-                created_by: selectedSchedule.teacher_id // You can update this with actual logged-in user ID
+                created_by: selectedAttendance.class_schedule?.teacher_id || '' // You can update this with actual logged-in user ID
             };
 
             // Save to Firestore
             const docId = await classAttendanceService.addClassAttendance(classAttendanceData);
 
-            alert(
+            showToast(
                 `✅ Attendance saved successfully!\n\n` +
                 `📅 Date: ${attendanceDate}\n` +
-                `📚 Subject: ${selectedSchedule.subject_name}\n` +
-                `✓ Present: ${stats.present}\n` +
-                `✗ Absent: ${stats.absent}\n` +
-                `⏰ Late: ${stats.late}\n` +
-                `👥 Total: ${stats.total}\n` +
-                `🤖 Type: Face Recognition\n` +
-                `📄 Document ID: ${docId}`
+                `📚 Subject: ${selectedAttendance.class_schedule?.subject_name || 'N/A'}\n` +
+                `✓ Present: ${stats.present}  ✗ Absent: ${stats.absent}  ⏰ Late: ${stats.late}\n` +
+                `👥 Total: ${stats.total}`,
+                'success',
+                7000
             );
 
             console.log('Attendance saved to Firestore:', {
@@ -513,7 +515,7 @@ export default function FaceRecognitionPage() {
 
         } catch (error) {
             console.error('Error saving attendance:', error);
-            alert('❌ Failed to save attendance. Please try again.\n\nError: ' + (error as Error).message);
+            showToast('❌ Failed to save attendance. Please try again.\n\nError: ' + (error as Error).message, 'error', 7000);
         }
     };
 
@@ -576,45 +578,55 @@ export default function FaceRecognitionPage() {
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-xl font-bold text-slate-800 flex items-center">
                                     <Calendar className="w-5 h-5 mr-2 text-indigo-500" />
-                                    Select Class Schedule
+                                    Select Attendance Record
                                 </h2>
-                                {fromUrl && selectedSchedule && (
+                                {fromUrl && selectedAttendance && (
                                     <span className="text-xs sm:text-sm bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full font-medium flex items-center space-x-1">
                                         <span>🔗</span>
                                         <span>Auto-loaded</span>
                                     </span>
                                 )}
                             </div>
-                            {schedules.length === 0 ? (
+                            {attendanceRecordsList.length === 0 ? (
                                 <div className="text-center py-8 text-slate-500">
                                     <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                                    <p>No class schedules found</p>
+                                    <p>No attendance records found</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {schedules.map((schedule) => (
+                                    {attendanceRecordsList.map((attendance) => (
                                         <button
-                                            key={schedule.id}
-                                            onClick={() => setSelectedSchedule(schedule)}
+                                            key={attendance.id}
+                                            onClick={() => {
+                                                setSelectedAttendance(attendance);
+                                                setAttendanceId(attendance.id || null);
+                                                setAttendanceData(attendance);
+                                            }}
                                             disabled={isScanning}
-                                            className={`text-left p-4 rounded-2xl border-2 transition-all duration-200 ${selectedSchedule?.id === schedule.id
+                                            className={`text-left p-4 rounded-2xl border-2 transition-all duration-200 ${selectedAttendance?.id === attendance.id
                                                 ? 'border-indigo-500 bg-indigo-50 shadow-md'
                                                 : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                                                 } ${isScanning ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
-                                            <h3 className="font-bold text-slate-800 mb-2">{schedule.subject_name}</h3>
+                                            <h3 className="font-bold text-slate-800 mb-2">
+                                                {attendance.class_schedule?.subject_name || 'N/A'}
+                                            </h3>
                                             <div className="space-y-1 text-sm text-slate-600">
                                                 <div className="flex items-center space-x-2">
-                                                    <Users className="w-4 h-4 text-indigo-500" />
-                                                    <span>{schedule.teacher_name}</span>
+                                                    <Calendar className="w-4 h-4 text-indigo-500" />
+                                                    <span>{attendance.attendance_date || 'N/A'}</span>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <Clock className="w-4 h-4 text-green-500" />
-                                                    <span>{schedule.schedule}</span>
+                                                    <Users className="w-4 h-4 text-green-500" />
+                                                    <span>{attendance.class_schedule?.course_year || 'N/A'}</span>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
-                                                    <MapPin className="w-4 h-4 text-orange-500" />
-                                                    <span className="text-xs">{schedule.building_room}</span>
+                                                    <Clock className="w-4 h-4 text-orange-500" />
+                                                    <span className="text-xs">{attendance.class_schedule?.schedule || 'N/A'}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-xs mt-2 pt-2 border-t border-slate-200">
+                                                    <span className="text-green-600 font-medium">✓ {attendance.present_count || 0}</span>
+                                                    <span className="text-red-600 font-medium">✗ {attendance.absent_count || 0}</span>
                                                 </div>
                                             </div>
                                         </button>
@@ -639,8 +651,8 @@ export default function FaceRecognitionPage() {
                                     {!isScanning ? (
                                         <button
                                             onClick={handleStartScanning}
-                                            disabled={!selectedSchedule || !modelsLoaded}
-                                            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center space-x-2 transition-all duration-200 ${selectedSchedule && modelsLoaded
+                                            disabled={!selectedAttendance || !modelsLoaded}
+                                            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm flex items-center space-x-2 transition-all duration-200 ${selectedAttendance && modelsLoaded
                                                 ? 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 shadow-md hover:shadow-lg'
                                                 : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                                                 }`}
@@ -702,9 +714,9 @@ export default function FaceRecognitionPage() {
                                 </div>
                             )}
                         </div>
-                        {selectedSchedule && (
+                        {selectedAttendance && (
                             <div className="mt-4 bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-sm text-indigo-800">
-                                <p className="font-semibold">📌 {selectedSchedule.subject_name}</p>
+                                <p className="font-semibold">📌 {selectedAttendance.class_schedule?.subject_name || 'N/A'}</p>
                                 <p className="text-indigo-600">{students.length} trained student(s) in this class</p>
                             </div>
                         )}
@@ -757,7 +769,7 @@ export default function FaceRecognitionPage() {
                                     }`}>👥 {stats.total}</span>
                             </div>
                         </div>
-                        {selectedSchedule && stats.present > 0 && (
+                        {selectedAttendance && stats.present > 0 && (
                             <button
                                 onClick={saveAttendance}
                                 className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 shadow-md hover:shadow-lg font-semibold flex items-center justify-center space-x-2"

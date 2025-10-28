@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Sidebar from '@/components/Layout/Sidebar';
+import { ToastProvider } from '@/components/Toast/Toast';
 
 export default function DashboardLayout({
     children,
@@ -37,11 +38,13 @@ export default function DashboardLayout({
     }
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-            <Sidebar />
-            <main className="flex-1 overflow-auto pt-16 lg:pt-0">
-                {children}
-            </main>
-        </div>
+        <ToastProvider>
+            <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+                <Sidebar />
+                <main className="flex-1 overflow-auto pt-16 lg:pt-0">
+                    {children}
+                </main>
+            </div>
+        </ToastProvider>
     );
 }

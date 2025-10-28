@@ -178,13 +178,26 @@ export default function ClassSchedulePage() {
             student.year_level === selectedSubject.year_level
         );
 
-        // Generate Course & Year options only for students matching the subject
+        // Use the actual section_year_block field from students, or generate it if missing
+        // This ensures exact matching between class schedules and student sections
         filteredStudents.forEach(student => {
-            const yearNumber = student.year_level.includes('1st') ? '1' :
-                student.year_level.includes('2nd') ? '2' :
-                    student.year_level.includes('3rd') ? '3' : '4';
-            const courseYear = `${student.department} ${yearNumber}${student.block}`;
-            options.add(courseYear);
+            let sectionYearBlock;
+
+            if (student.section_year_block) {
+                // Use the existing section_year_block value
+                sectionYearBlock = student.section_year_block.trim();
+            } else {
+                // Fallback: Generate it from department, year_level, and block (for old records)
+                const departmentCode = student.department?.split(' - ')[0]?.trim() || '';
+                const yearNumber = student.year_level?.includes('1st') ? '1' :
+                    student.year_level?.includes('2nd') ? '2' :
+                        student.year_level?.includes('3rd') ? '3' : '4';
+                sectionYearBlock = `${departmentCode} ${yearNumber}${student.block || ''}`.trim();
+            }
+
+            if (sectionYearBlock) {
+                options.add(sectionYearBlock);
+            }
         });
 
         return Array.from(options).sort();

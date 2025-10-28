@@ -99,11 +99,23 @@ export default function StudentsPage() {
         setIsSubmitting(true);
 
         try {
+            // Extract department code from full department name (e.g., "BSIT - Bachelor..." -> "BSIT")
+            const departmentCode = formData.department.split(' - ')[0].trim();
+
+            // Extract year number from year_level (e.g., "4th Year" -> "4")
+            const yearNumber = formData.year_level.includes('1st') ? '1' :
+                formData.year_level.includes('2nd') ? '2' :
+                    formData.year_level.includes('3rd') ? '3' : '4';
+
+            // Generate section_year_block (e.g., "BSIT 4D")
+            const section_year_block = `${departmentCode} ${yearNumber}${formData.block}`;
+
             const studentData = {
                 full_name: formData.full_name,
                 year_level: formData.year_level,
                 department: formData.department,
                 block: formData.block,
+                section_year_block: section_year_block,
                 subject: formData.selectedSubjects
             };
 
@@ -131,11 +143,23 @@ export default function StudentsPage() {
 
         setIsUpdating(true);
         try {
+            // Extract department code from full department name (e.g., "BSIT - Bachelor..." -> "BSIT")
+            const departmentCode = formData.department.split(' - ')[0].trim();
+
+            // Extract year number from year_level (e.g., "4th Year" -> "4")
+            const yearNumber = formData.year_level.includes('1st') ? '1' :
+                formData.year_level.includes('2nd') ? '2' :
+                    formData.year_level.includes('3rd') ? '3' : '4';
+
+            // Generate section_year_block (e.g., "BSIT 4D")
+            const section_year_block = `${departmentCode} ${yearNumber}${formData.block}`;
+
             const studentData = {
                 full_name: formData.full_name,
                 year_level: formData.year_level,
                 department: formData.department,
                 block: formData.block,
+                section_year_block: section_year_block,
                 subject: formData.selectedSubjects
             };
 

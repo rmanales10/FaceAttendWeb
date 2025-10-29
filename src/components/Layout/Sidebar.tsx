@@ -55,13 +55,13 @@ export default function Sidebar() {
             <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-slate-200 shadow-sm">
                 <div className="flex items-center justify-between p-4">
                     <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
+                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm overflow-hidden p-1">
                             <Image
                                 src="/images/logo.png"
                                 alt="Face Attendance Logo"
-                                width={24}
-                                height={24}
-                                className="object-contain filter brightness-0 invert"
+                                width={32}
+                                height={32}
+                                className="object-contain"
                             />
                         </div>
                         <div>
@@ -97,13 +97,13 @@ export default function Sidebar() {
                     {/* Header Section - Hidden on mobile (shown in top bar) */}
                     <div className="hidden lg:block p-6 border-b border-slate-200">
                         <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
+                            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm overflow-hidden p-1.5">
                                 <Image
                                     src="/images/logo.png"
                                     alt="Face Attendance Logo"
-                                    width={32}
-                                    height={32}
-                                    className="object-contain filter brightness-0 invert"
+                                    width={40}
+                                    height={40}
+                                    className="object-contain"
                                 />
                             </div>
                             <div>

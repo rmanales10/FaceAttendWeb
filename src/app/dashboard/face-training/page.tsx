@@ -18,11 +18,14 @@ import {
     ImagePlus,
     UserCircle
 } from 'lucide-react';
+import { useToast } from '@/hooks/useToast';
+import { ToastContainer } from '@/components/Toast';
 
 type PersonType = 'student' | 'teacher';
 type Person = (Student | User) & { type: PersonType };
 
 export default function FaceTrainingPage() {
+    const { toasts, removeToast, success, error: showError, warning } = useToast();
     const [students, setStudents] = useState<Student[]>([]);
     const [teachers, setTeachers] = useState<User[]>([]);
     const [filteredPersons, setFilteredPersons] = useState<Person[]>([]);
@@ -125,7 +128,7 @@ export default function FaceTrainingPage() {
 
     const handleTrainPerson = (person: Person) => {
         if (!modelsLoaded) {
-            alert('Face recognition models are still loading. Please wait...');
+            warning('Face recognition models are still loading. Please wait...');
             return;
         }
         setSelectedPerson(person);
@@ -163,9 +166,9 @@ export default function FaceTrainingPage() {
 
             // Get available cameras after stream is active
             await getCameras();
-        } catch (error) {
-            console.error('Error accessing camera:', error);
-            alert('Could not access camera. Please check permissions.');
+        } catch (err) {
+            console.error('Error accessing camera:', err);
+            showError('Could not access camera. Please check permissions.');
         }
     };
 
@@ -190,9 +193,9 @@ export default function FaceTrainingPage() {
                         videoRef.current.srcObject = stream;
                         setIsCapturing(true);
                     }
-                } catch (error) {
-                    console.error('Error switching camera:', error);
-                    alert('Could not switch camera.');
+                } catch (err) {
+                    console.error('Error switching camera:', err);
+                    showError('Could not switch camera.');
                 }
             }, 100);
         }
@@ -229,14 +232,14 @@ export default function FaceTrainingPage() {
                 .withFaceDescriptor();
 
             if (!detection) {
-                alert('No face detected. Please position your face clearly in the camera.');
+                warning('No face detected. Please position your face clearly in the camera.');
                 return;
             }
 
             setTrainingImages(prev => [...prev, imageData]);
-        } catch (error) {
-            console.error('Error detecting face:', error);
-            alert('Error detecting face. Please try again.');
+        } catch (err) {
+            console.error('Error detecting face:', err);
+            showError('Error detecting face. Please try again.');
         }
     };
 
@@ -264,7 +267,7 @@ export default function FaceTrainingPage() {
                     if (detection) {
                         setTrainingImages(prev => [...prev, imageData]);
                     } else {
-                        alert(`No face detected in ${file.name}. Please upload a clear face image.`);
+                        warning(`No face detected in ${file.name}. Please upload a clear face image.`);
                     }
                 } catch (error) {
                     console.error('Error processing image:', error);
@@ -285,7 +288,7 @@ export default function FaceTrainingPage() {
 
     const saveFaceTraining = async () => {
         if (trainingImages.length < 5) {
-            alert('Please capture or upload at least 5 images for better accuracy.');
+            warning('Please capture or upload at least 5 images for better accuracy.');
             return;
         }
 
@@ -309,7 +312,7 @@ export default function FaceTrainingPage() {
             }
 
             if (descriptors.length === 0) {
-                alert('Failed to extract face descriptors. Please try again with clearer images.');
+                showError('Failed to extract face descriptors. Please try again with clearer images.');
                 setIsProcessing(false);
                 return;
             }
@@ -339,12 +342,12 @@ export default function FaceTrainingPage() {
             const personName = selectedPerson.type === 'student'
                 ? (selectedPerson as Student).full_name
                 : (selectedPerson as User).fullname;
-            alert(`✅ Face training completed successfully for ${personName}!\n${trainingImages.length} images processed.`);
+            success(`Face training completed successfully for ${personName}!\n${trainingImages.length} images processed.`);
             closeTrainingModal();
             fetchData();
-        } catch (error) {
-            console.error('Error saving face training:', error);
-            alert('❌ Failed to save face training. Please try again.');
+        } catch (err) {
+            console.error('Error saving face training:', err);
+            showError('Failed to save face training. Please try again.');
         } finally {
             setIsProcessing(false);
         }
@@ -423,7 +426,7 @@ export default function FaceTrainingPage() {
                     >
                         <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Students</span>
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeFilter === 'student' ? 'bg-white bg-opacity-20' : 'bg-blue-100 text-blue-700'
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeFilter === 'student' ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'
                             }`}>
                             {students.length}
                         </span>
@@ -437,7 +440,7 @@ export default function FaceTrainingPage() {
                     >
                         <UserCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Teachers</span>
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeFilter === 'teacher' ? 'bg-white bg-opacity-20' : 'bg-purple-100 text-purple-700'
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeFilter === 'teacher' ? 'bg-white text-purple-600' : 'bg-purple-100 text-purple-700'
                             }`}>
                             {teachers.length}
                         </span>
@@ -859,6 +862,9 @@ export default function FaceTrainingPage() {
                     </div>
                 </div>
             )}
+
+            {/* Toast Notifications */}
+            <ToastContainer toasts={toasts} onClose={removeToast} />
         </div>
     );
 }

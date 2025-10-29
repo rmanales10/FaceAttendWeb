@@ -341,13 +341,13 @@ export default function ReportsPage() {
                     <button
                         onClick={() => setActiveCategory('student')}
                         className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeCategory === 'student'
-                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                                : 'text-slate-600 hover:bg-slate-50'
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                            : 'text-slate-600 hover:bg-slate-50'
                             }`}
                     >
                         <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Student Attendances</span>
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeCategory === 'student' ? 'bg-white bg-opacity-20' : 'bg-blue-100 text-blue-700'
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeCategory === 'student' ? 'bg-white text-blue-600' : 'bg-blue-100 text-blue-700'
                             }`}>
                             {studentAttendanceRecords.length}
                         </span>
@@ -355,13 +355,13 @@ export default function ReportsPage() {
                     <button
                         onClick={() => setActiveCategory('faculty')}
                         className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeCategory === 'faculty'
-                                ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
-                                : 'text-slate-600 hover:bg-slate-50'
+                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
+                            : 'text-slate-600 hover:bg-slate-50'
                             }`}
                     >
                         <UserCircle className="w-4 h-4 sm:w-5 sm:h-5" />
                         <span>Faculty Attendances</span>
-                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeCategory === 'faculty' ? 'bg-white bg-opacity-20' : 'bg-purple-100 text-purple-700'
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeCategory === 'faculty' ? 'bg-white text-purple-600' : 'bg-purple-100 text-purple-700'
                             }`}>
                             {facultyAttendanceRecords.length}
                         </span>

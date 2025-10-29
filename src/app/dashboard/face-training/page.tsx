@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { studentService, Student } from '@/lib/firestore';
+import { studentService, Student, userService, User } from '@/lib/firestore';
 import * as faceapi from 'face-api.js';
 import {
     Search,
@@ -15,17 +15,23 @@ import {
     X,
     Loader2,
     Video,
-    ImagePlus
+    ImagePlus,
+    UserCircle
 } from 'lucide-react';
+
+type PersonType = 'student' | 'teacher';
+type Person = (Student | User) & { type: PersonType };
 
 export default function FaceTrainingPage() {
     const [students, setStudents] = useState<Student[]>([]);
-    const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
+    const [teachers, setTeachers] = useState<User[]>([]);
+    const [filteredPersons, setFilteredPersons] = useState<Person[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeFilter, setActiveFilter] = useState<PersonType>('student');
     const [loading, setLoading] = useState(true);
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [showTrainingModal, setShowTrainingModal] = useState(false);
-    const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+    const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
     const [trainingImages, setTrainingImages] = useState<string[]>([]);
     const [isCapturing, setIsCapturing] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -37,13 +43,13 @@ export default function FaceTrainingPage() {
 
     useEffect(() => {
         loadModels();
-        fetchStudents();
+        fetchData();
     }, []);
 
     useEffect(() => {
-        filterStudents();
+        filterPersons();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [students, searchQuery]);
+    }, [students, teachers, searchQuery, activeFilter]);
 
     const loadModels = async () => {
         try {
@@ -60,39 +66,69 @@ export default function FaceTrainingPage() {
         }
     };
 
-    const fetchStudents = async () => {
+    const fetchData = async () => {
         try {
-            const data = await studentService.getAllStudents();
-            setStudents(data);
-            setFilteredStudents(data);
+            const [studentsData, usersData] = await Promise.all([
+                studentService.getAllStudents(),
+                userService.getAllUsers()
+            ]);
+            setStudents(studentsData);
+            // Filter only users with role 'teacher' if role field exists
+            const teachersData = usersData.filter(user =>
+                user.role === 'teacher' || !user.role // Include users without role for backwards compatibility
+            );
+            setTeachers(teachersData);
         } catch (error) {
-            console.error('Error fetching students:', error);
+            console.error('Error fetching data:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const filterStudents = useCallback(() => {
+    const filterPersons = useCallback(() => {
+        const allPersons: Person[] = activeFilter === 'student'
+            ? students.map(s => ({ ...s, type: 'student' as PersonType }))
+            : teachers.map(t => ({ ...t, type: 'teacher' as PersonType }));
+
         if (!searchQuery.trim()) {
-            setFilteredStudents(students);
+            setFilteredPersons(allPersons);
             return;
         }
 
-        const filtered = students.filter(student =>
-            student.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            student.year_level.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            student.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            student.block.toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setFilteredStudents(filtered);
-    }, [students, searchQuery]);
+        const filtered = allPersons.filter(person => {
+            const query = searchQuery.toLowerCase();
 
-    const handleTrainStudent = (student: Student) => {
+            if (person.type === 'student') {
+                const student = person as Student;
+                const name = student.full_name?.toLowerCase() || '';
+                const department = student.department?.toLowerCase() || '';
+                return (
+                    name.includes(query) ||
+                    student.year_level?.toLowerCase().includes(query) ||
+                    department.includes(query) ||
+                    student.block?.toLowerCase().includes(query)
+                );
+            } else {
+                const teacher = person as User;
+                const name = teacher.fullname?.toLowerCase() || '';
+                const department = teacher.department?.toLowerCase() || '';
+                const email = teacher.email?.toLowerCase() || '';
+                return (
+                    name.includes(query) ||
+                    department.includes(query) ||
+                    email.includes(query)
+                );
+            }
+        });
+        setFilteredPersons(filtered);
+    }, [students, teachers, searchQuery, activeFilter]);
+
+    const handleTrainPerson = (person: Person) => {
         if (!modelsLoaded) {
             alert('Face recognition models are still loading. Please wait...');
             return;
         }
-        setSelectedStudent(student);
+        setSelectedPerson(person);
         setShowTrainingModal(true);
     };
 
@@ -253,7 +289,7 @@ export default function FaceTrainingPage() {
             return;
         }
 
-        if (!selectedStudent) return;
+        if (!selectedPerson) return;
 
         setIsProcessing(true);
         try {
@@ -286,17 +322,26 @@ export default function FaceTrainingPage() {
                 avgDescriptor[i] = sum / descriptors.length;
             }
 
-            // Save to Firestore (convert Float32Array to regular array for storage)
-            await studentService.updateStudent(selectedStudent.id!, {
+            // Save to Firestore based on person type
+            const updateData = {
                 face_descriptors: Array.from(avgDescriptor),
                 face_trained: true,
                 training_date: new Date().toISOString(),
                 training_images_count: trainingImages.length
-            });
+            };
 
-            alert(`✅ Face training completed successfully for ${selectedStudent.full_name}!\n${trainingImages.length} images processed.`);
+            if (selectedPerson.type === 'student') {
+                await studentService.updateStudent(selectedPerson.id!, updateData);
+            } else {
+                await userService.updateUser(selectedPerson.id!, updateData);
+            }
+
+            const personName = selectedPerson.type === 'student'
+                ? (selectedPerson as Student).full_name
+                : (selectedPerson as User).fullname;
+            alert(`✅ Face training completed successfully for ${personName}!\n${trainingImages.length} images processed.`);
             closeTrainingModal();
-            fetchStudents();
+            fetchData();
         } catch (error) {
             console.error('Error saving face training:', error);
             alert('❌ Failed to save face training. Please try again.');
@@ -308,7 +353,7 @@ export default function FaceTrainingPage() {
     const closeTrainingModal = () => {
         stopCamera();
         setShowTrainingModal(false);
-        setSelectedStudent(null);
+        setSelectedPerson(null);
         setTrainingImages([]);
         setIsCapturing(false);
     };
@@ -323,8 +368,9 @@ export default function FaceTrainingPage() {
     };
 
     const getTrainingStats = () => {
-        const total = students.length;
-        const trained = students.filter(s => s.face_trained).length;
+        const activeData = activeFilter === 'student' ? students : teachers;
+        const total = activeData.length;
+        const trained = activeData.filter(p => p.face_trained === true).length;
         const untrained = total - trained;
         return { total, trained, untrained };
     };
@@ -352,7 +398,9 @@ export default function FaceTrainingPage() {
                     </div>
                     <div>
                         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800">Face Training</h1>
-                        <p className="text-slate-500 text-sm sm:text-base lg:text-lg mt-1">Train and manage student face recognition data</p>
+                        <p className="text-slate-500 text-sm sm:text-base lg:text-lg mt-1">
+                            Train and manage {activeFilter === 'student' ? 'student' : 'teacher'} face recognition data
+                        </p>
                     </div>
                 </div>
                 {!modelsLoaded && (
@@ -361,6 +409,40 @@ export default function FaceTrainingPage() {
                         <span className="text-orange-800 font-medium text-sm sm:text-base">Loading face recognition models...</span>
                     </div>
                 )}
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="mb-6 sm:mb-8">
+                <div className="bg-white rounded-2xl p-2 shadow-sm border border-slate-200 inline-flex space-x-2">
+                    <button
+                        onClick={() => setActiveFilter('student')}
+                        className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeFilter === 'student'
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                            : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                    >
+                        <GraduationCap className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span>Students</span>
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeFilter === 'student' ? 'bg-white bg-opacity-20' : 'bg-blue-100 text-blue-700'
+                            }`}>
+                            {students.length}
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveFilter('teacher')}
+                        className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeFilter === 'teacher'
+                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
+                            : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                    >
+                        <UserCircle className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span>Teachers</span>
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeFilter === 'teacher' ? 'bg-white bg-opacity-20' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                            {teachers.length}
+                        </span>
+                    </button>
+                </div>
             </div>
 
             {/* Statistics Cards */}
@@ -408,7 +490,7 @@ export default function FaceTrainingPage() {
                     <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
                     <input
                         type="text"
-                        placeholder="Search students..."
+                        placeholder={`Search ${activeFilter === 'student' ? 'students' : 'teachers'}...`}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm sm:text-base"
@@ -417,12 +499,14 @@ export default function FaceTrainingPage() {
             </div>
 
             {/* Table View */}
-            {filteredStudents.length === 0 ? (
+            {filteredPersons.length === 0 ? (
                 <div className="text-center py-12 sm:py-16">
                     <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-4 sm:mb-6">
                         <Users className="w-8 h-8 sm:w-10 sm:h-10 text-slate-400" />
                     </div>
-                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">No Students Found</h3>
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 mb-2">
+                        No {activeFilter === 'student' ? 'Students' : 'Teachers'} Found
+                    </h3>
                     <p className="text-sm sm:text-base text-slate-500">Try adjusting your search query</p>
                 </div>
             ) : (
@@ -432,17 +516,26 @@ export default function FaceTrainingPage() {
                             <thead className="bg-gradient-to-r from-slate-50 to-slate-100">
                                 <tr>
                                     <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                        Student Info
+                                        {activeFilter === 'student' ? 'Student' : 'Teacher'} Info
                                     </th>
-                                    <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider hidden md:table-cell">
-                                        Year Level
-                                    </th>
+                                    {activeFilter === 'student' && (
+                                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider hidden md:table-cell">
+                                            Year Level
+                                        </th>
+                                    )}
                                     <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider hidden lg:table-cell">
                                         Department
                                     </th>
-                                    <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider hidden lg:table-cell">
-                                        Block
-                                    </th>
+                                    {activeFilter === 'student' && (
+                                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider hidden lg:table-cell">
+                                            Block
+                                        </th>
+                                    )}
+                                    {activeFilter === 'teacher' && (
+                                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider hidden lg:table-cell">
+                                            Email
+                                        </th>
+                                    )}
                                     <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-left text-[10px] sm:text-xs font-bold text-slate-700 uppercase tracking-wider">
                                         Status
                                     </th>
@@ -452,43 +545,66 @@ export default function FaceTrainingPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {filteredStudents.map((student, index) => {
-                                    const isTrained = student.face_trained || false;
+                                {filteredPersons.map((person, index) => {
+                                    const isStudent = person.type === 'student';
+                                    const student = isStudent ? (person as Student) : null;
+                                    const teacher = !isStudent ? (person as User) : null;
+                                    const personName = isStudent
+                                        ? (person as Student).full_name
+                                        : (person as User).fullname;
+                                    const isTrained = (isStudent ? student?.face_trained : teacher?.face_trained) || false;
 
                                     return (
                                         <tr
-                                            key={student.id}
+                                            key={person.id}
                                             className="hover:bg-slate-50 transition-colors duration-150"
                                         >
                                             <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5">
                                                 <div className="flex items-center space-x-2 sm:space-x-3 lg:space-x-4">
-                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg sm:rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0">
-                                                        {getInitials(student.full_name)}
+                                                    <div className={`w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r ${isStudent
+                                                        ? 'from-blue-500 to-blue-600'
+                                                        : 'from-purple-500 to-purple-600'
+                                                        } rounded-lg sm:rounded-xl flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0`}>
+                                                        {getInitials(personName || '')}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">{student.full_name}</p>
+                                                        <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">{personName}</p>
                                                         <p className="text-xs sm:text-sm text-slate-500">
-                                                            <span className="md:hidden">{student.year_level} • {student.department}</span>
+                                                            {isStudent && student && (
+                                                                <span className="md:hidden">{student.year_level} • {student.department}</span>
+                                                            )}
+                                                            {!isStudent && teacher && (
+                                                                <span className="md:hidden">{teacher.department || 'N/A'}</span>
+                                                            )}
                                                             <span className="hidden md:inline">#{index + 1}</span>
                                                         </p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 hidden md:table-cell">
-                                                <div className="flex items-center space-x-2">
-                                                    <GraduationCap className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                                                    <span className="text-slate-700 font-medium text-sm">{student.year_level}</span>
-                                                </div>
-                                            </td>
+                                            {isStudent && student && (
+                                                <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 hidden md:table-cell">
+                                                    <div className="flex items-center space-x-2">
+                                                        <GraduationCap className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                                        <span className="text-slate-700 font-medium text-sm">{student.year_level}</span>
+                                                    </div>
+                                                </td>
+                                            )}
                                             <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 hidden lg:table-cell">
                                                 <div className="flex items-center space-x-2">
                                                     <BookOpen className="w-4 h-4 text-green-500 flex-shrink-0" />
-                                                    <span className="text-slate-700 font-medium text-sm">{student.department}</span>
+                                                    <span className="text-slate-700 font-medium text-sm">{person.department}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 hidden lg:table-cell">
-                                                <span className="text-slate-700 font-medium text-sm">{student.block}</span>
-                                            </td>
+                                            {isStudent && student && (
+                                                <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 hidden lg:table-cell">
+                                                    <span className="text-slate-700 font-medium text-sm">{student.block}</span>
+                                                </td>
+                                            )}
+                                            {!isStudent && teacher && (
+                                                <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 hidden lg:table-cell">
+                                                    <span className="text-slate-700 font-medium text-sm">{teacher.email || 'N/A'}</span>
+                                                </td>
+                                            )}
                                             <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5">
                                                 <span className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold ${isTrained
                                                     ? 'bg-green-100 text-green-800 border border-green-200'
@@ -511,7 +627,7 @@ export default function FaceTrainingPage() {
                                             </td>
                                             <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-right">
                                                 <button
-                                                    onClick={() => handleTrainStudent(student)}
+                                                    onClick={() => handleTrainPerson(person)}
                                                     disabled={!modelsLoaded}
                                                     className={`inline-flex items-center px-3 sm:px-4 lg:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 shadow-md hover:shadow-lg font-semibold text-xs sm:text-sm space-x-1 sm:space-x-2 ${modelsLoaded
                                                         ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
@@ -533,18 +649,31 @@ export default function FaceTrainingPage() {
             )}
 
             {/* Training Modal */}
-            {showTrainingModal && selectedStudent && (
+            {showTrainingModal && selectedPerson && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
                         {/* Modal Header */}
-                        <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-t-3xl flex items-center justify-between">
+                        <div className={`sticky top-0 bg-gradient-to-r ${selectedPerson.type === 'student'
+                            ? 'from-blue-500 to-blue-600'
+                            : 'from-purple-500 to-purple-600'
+                            } p-6 rounded-t-3xl flex items-center justify-between`}>
                             <div className="flex items-center space-x-4">
                                 <div className="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center">
-                                    <Camera className="w-6 h-6 text-white" />
+                                    {selectedPerson.type === 'student' ? (
+                                        <GraduationCap className="w-6 h-6 text-white" />
+                                    ) : (
+                                        <UserCircle className="w-6 h-6 text-white" />
+                                    )}
                                 </div>
                                 <div>
                                     <h2 className="text-2xl font-bold text-white">Train Face Recognition</h2>
-                                    <p className="text-purple-100">{selectedStudent.full_name}</p>
+                                    <p className={`${selectedPerson.type === 'student' ? 'text-blue-100' : 'text-purple-100'
+                                        }`}>
+                                        {selectedPerson.type === 'student'
+                                            ? (selectedPerson as Student).full_name
+                                            : (selectedPerson as User).fullname
+                                        } • {selectedPerson.type === 'student' ? 'Student' : 'Teacher'}
+                                    </p>
                                 </div>
                             </div>
                             <button

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { dashboardService, holidayService, Holiday, activityLogService, ActivityLog } from '@/lib/firestore';
-import { Calendar, Users, GraduationCap, BookOpen, Clock, Plus, Trash2, X, Activity, AlertCircle } from 'lucide-react';
+import { Calendar, Users, GraduationCap, BookOpen, Clock, Plus, Trash2, X, Activity, AlertCircle, User, Mail } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Statistics {
     totalStudents: number;
@@ -12,6 +13,7 @@ interface Statistics {
 }
 
 export default function DashboardPage() {
+    const { user, isAdmin } = useAuth();
     const [stats, setStats] = useState<Statistics>({
         totalStudents: 0,
         totalTeachers: 0,
@@ -215,16 +217,49 @@ export default function DashboardPage() {
         <div className="p-4 sm:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
             {/* Header */}
             <div className="mb-6 sm:mb-8">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex-1">
                         <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-800 mb-1 sm:mb-2">Admin Dashboard</h1>
                         <p className="text-sm sm:text-base text-slate-600">Monitor and manage your system</p>
                     </div>
-                    <div className="flex items-center space-x-2 sm:space-x-3 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-6 py-2 sm:py-3 rounded-xl sm:rounded-2xl border border-blue-100">
-                        <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
-                        <span className="text-slate-700 font-semibold text-sm sm:text-base">
-                            {new Date().toLocaleDateString()}
-                        </span>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        {/* User Info */}
+                        {user && (
+                            <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-4 sm:px-5 py-3 rounded-xl border border-indigo-100 shadow-sm">
+                                <div className="flex items-start space-x-3">
+                                    <div className="flex-shrink-0">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+                                            <User className="w-5 h-5 text-white" />
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center space-x-2">
+                                            <p className="text-sm font-bold text-slate-800 truncate">
+                                                {user.displayName || 'Admin User'}
+                                            </p>
+                                            {isAdmin && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-sm">
+                                                    ADMIN
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center space-x-1.5 mt-0.5">
+                                            <Mail className="w-3 h-3 text-slate-500 flex-shrink-0" />
+                                            <p className="text-xs text-slate-600 truncate">
+                                                {user.email}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        {/* Date */}
+                        <div className="flex items-center space-x-2 sm:space-x-3 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-6 py-3 rounded-xl border border-blue-100 shadow-sm">
+                            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
+                            <span className="text-slate-700 font-semibold text-sm sm:text-base whitespace-nowrap">
+                                {new Date().toLocaleDateString()}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>

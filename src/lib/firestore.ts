@@ -26,6 +26,10 @@ export interface User {
     role?: string; // 'teacher', 'admin', 'student'
     department?: string;
     base64image?: string;
+    face_trained?: boolean;
+    face_descriptors?: number[]; // Face embedding for recognition
+    training_date?: string;
+    training_images_count?: number;
 }
 
 export interface Student {
@@ -130,6 +134,70 @@ export interface ActivityLog {
     details: string;
     timestamp: Timestamp;
 }
+
+export interface Admin {
+    id?: string;
+    uid: string; // Firebase Auth UID
+    fullName: string;
+    email: string;
+    role: 'admin';
+    createdAt?: Timestamp;
+    updatedAt?: Timestamp;
+}
+
+// Admin operations
+export const adminService = {
+    async createAdmin(admin: Omit<Admin, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
+        await addDoc(collection(db, 'admins'), {
+            ...admin,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+        });
+    },
+
+    async getAdminByUid(uid: string): Promise<Admin | null> {
+        const q = query(collection(db, 'admins'), where('uid', '==', uid));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            return null;
+        }
+
+        const doc = querySnapshot.docs[0];
+        return {
+            id: doc.id,
+            ...doc.data()
+        } as Admin;
+    },
+
+    async getAdminByEmail(email: string): Promise<Admin | null> {
+        const q = query(collection(db, 'admins'), where('email', '==', email));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            return null;
+        }
+
+        const doc = querySnapshot.docs[0];
+        return {
+            id: doc.id,
+            ...doc.data()
+        } as Admin;
+    },
+
+    async getAllAdmins(): Promise<Admin[]> {
+        const querySnapshot = await getDocs(collection(db, 'admins'));
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Admin[];
+    },
+
+    async isAdmin(uid: string): Promise<boolean> {
+        const admin = await this.getAdminByUid(uid);
+        return admin !== null && admin.role === 'admin';
+    }
+};
 
 // Student operations
 export const studentService = {
@@ -309,6 +377,14 @@ export const userService = {
             id: doc.id,
             ...doc.data()
         })) as User[];
+    },
+
+    async updateUser(id: string, data: Partial<User>): Promise<void> {
+        const userRef = doc(db, 'users', id);
+        await updateDoc(userRef, {
+            ...data,
+            lastActive: serverTimestamp()
+        });
     },
 
     async getTeachers(): Promise<Teacher[]> {

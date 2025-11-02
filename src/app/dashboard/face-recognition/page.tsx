@@ -416,11 +416,21 @@ export default function FaceRecognitionPage() {
         stopCamera();
     };
 
+    const formatTime = (date: Date): string => {
+        const hour = date.getHours();
+        const minute = date.getMinutes();
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        const minuteStr = minute.toString().padStart(2, '0');
+        return `${displayHour}:${minuteStr} ${period}`;
+    };
+
     const markAttendance = (studentName: string, status: 'present' | 'absent' | 'late', confidence?: number) => {
+        const now = new Date();
         setAttendanceRecords(prev =>
             prev.map(record =>
                 record.student_name === studentName && record.status === 'absent'
-                    ? { ...record, status, timestamp: new Date(), confidence }
+                    ? { ...record, status, timestamp: now, confidence }
                     : record
             )
         );
@@ -446,11 +456,12 @@ export default function FaceRecognitionPage() {
             const stats = getAttendanceStats();
 
             // Convert attendance records to Firestore format with 'face' type
-            const formattedRecords: FirestoreAttendanceRecord[] = attendanceRecords.map(record => ({
+            const formattedRecords: (FirestoreAttendanceRecord & { time_in?: string })[] = attendanceRecords.map(record => ({
                 student_id: record.student_id,
                 student_name: record.student_name,
                 status: record.status,
                 timestamp: record.timestamp,
+                time_in: record.status === 'present' ? formatTime(record.timestamp) : '',
                 attendance_type: 'face' as const, // Mark as face recognition attendance
                 confidence: record.confidence
             }));

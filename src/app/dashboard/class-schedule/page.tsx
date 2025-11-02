@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { classScheduleService, ClassSchedule, userService, Teacher, subjectService, Subject, studentService, Student } from '@/lib/firestore';
+import { classScheduleService, ClassSchedule, userService, Teacher, subjectService, Subject, studentService, Student, roomService, Room } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
+import { useToast } from '@/components/Toast/Toast';
 import {
     Plus,
     Search,
@@ -20,11 +21,13 @@ import {
 } from 'lucide-react';
 
 export default function ClassSchedulePage() {
+    const { showToast } = useToast();
     const [classSchedules, setClassSchedules] = useState<ClassSchedule[]>([]);
     const [filteredSchedules, setFilteredSchedules] = useState<ClassSchedule[]>([]);
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
+    const [rooms, setRooms] = useState<Room[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [departmentFilter, setDepartmentFilter] = useState('');
     const [yearLevelFilter, setYearLevelFilter] = useState('');
@@ -71,16 +74,18 @@ export default function ClassSchedulePage() {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [schedulesData, teachersData, subjectsData, studentsData] = await Promise.all([
+            const [schedulesData, teachersData, subjectsData, studentsData, roomsData] = await Promise.all([
                 classScheduleService.getAllClassSchedules(),
                 userService.getTeachers(),
                 subjectService.getAllSubjects(),
-                studentService.getAllStudents()
+                studentService.getAllStudents(),
+                roomService.getAllRooms()
             ]);
             setClassSchedules(schedulesData);
             setTeachers(teachersData);
             setSubjects(subjectsData);
             setStudents(studentsData);
+            setRooms(roomsData);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -283,9 +288,9 @@ export default function ClassSchedulePage() {
         // Validate that course_year is selected when subject is selected
         if (formData.subject_id && !formData.course_year) {
             if (getCourseYearOptions().length === 0) {
-                alert('No students are available for the selected subject. Please add students for this subject first.');
+                showToast('No students are available for the selected subject. Please add students for this subject first.', 'warning', 6000);
             } else {
-                alert('Please select a Course & Year for the selected subject.');
+                showToast('Please select a Course & Year for the selected subject.', 'warning', 5000);
             }
             return;
         }
@@ -293,7 +298,7 @@ export default function ClassSchedulePage() {
         // Format and validate schedule
         const formattedSchedule = formatScheduleString();
         if (!formattedSchedule) {
-            alert('Please complete the schedule information (days, start time, and end time).');
+            showToast('Please complete the schedule information (days, start time, and end time).', 'warning', 5000);
             return;
         }
 
@@ -335,7 +340,7 @@ export default function ClassSchedulePage() {
             });
         } catch (error) {
             console.error('Error adding class schedule:', error);
-            alert('Error adding class schedule. Please try again.');
+            showToast('Error adding class schedule. Please try again.', 'error', 5000);
         } finally {
             setIsSubmitting(false);
         }
@@ -348,9 +353,9 @@ export default function ClassSchedulePage() {
         // Validate that course_year is selected when subject is selected
         if (formData.subject_id && !formData.course_year) {
             if (getCourseYearOptions().length === 0) {
-                alert('No students are available for the selected subject. Please add students for this subject first.');
+                showToast('No students are available for the selected subject. Please add students for this subject first.', 'warning', 6000);
             } else {
-                alert('Please select a Course & Year for the selected subject.');
+                showToast('Please select a Course & Year for the selected subject.', 'warning', 5000);
             }
             return;
         }
@@ -358,7 +363,7 @@ export default function ClassSchedulePage() {
         // Format and validate schedule
         const formattedSchedule = formatScheduleString();
         if (!formattedSchedule) {
-            alert('Please complete the schedule information (days, start time, and end time).');
+            showToast('Please complete the schedule information (days, start time, and end time).', 'warning', 5000);
             return;
         }
 
@@ -382,7 +387,7 @@ export default function ClassSchedulePage() {
             closeEditModal();
         } catch (error) {
             console.error('Error updating class schedule:', error);
-            alert('Error updating class schedule. Please try again.');
+            showToast('Error updating class schedule. Please try again.', 'error', 5000);
         } finally {
             setIsUpdating(false);
         }
@@ -752,7 +757,7 @@ export default function ClassSchedulePage() {
                         <div className="p-6">
                             {/* Form */}
                             <form onSubmit={handleSubmit} className="space-y-4">
-                                {/* Row 1: Teacher and Subject */}
+                                {/* Row 1: Teacher and Building and Room */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="group">
                                         <label htmlFor="teacher_id" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
@@ -777,22 +782,22 @@ export default function ClassSchedulePage() {
                                     </div>
 
                                     <div className="group">
-                                        <label htmlFor="subject_id" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
-                                            <BookOpen className="w-3 h-3 text-emerald-500" />
-                                            <span>Subject</span>
+                                        <label htmlFor="building_room" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
+                                            <MapPin className="w-3 h-3 text-orange-500" />
+                                            <span>Bldg. and Room No.</span>
                                         </label>
                                         <select
-                                            id="subject_id"
-                                            name="subject_id"
-                                            value={formData.subject_id}
-                                            onChange={(e) => handleSubjectChange(e.target.value)}
-                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-20 focus:border-emerald-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                            id="building_room"
+                                            name="building_room"
+                                            value={formData.building_room}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-20 focus:border-orange-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
                                             required
                                         >
-                                            <option value="">Select Subject</option>
-                                            {subjects.map(subject => (
-                                                <option key={subject.id} value={subject.id} className="font-medium text-slate-800">
-                                                    {subject.course_code} - {subject.subject_name} ({subject.department} {subject.year_level})
+                                            <option value="">Select Room</option>
+                                            {rooms.map((room) => (
+                                                <option key={room.id} value={room.room_code}>
+                                                    {room.room_code}
                                                 </option>
                                             ))}
                                         </select>
@@ -801,35 +806,34 @@ export default function ClassSchedulePage() {
 
                                 {/* Row 2: Course & Year and Schedule */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Course & Year - Only show if subject is selected */}
-                                    {formData.subject_id && (
-                                        <div className="group">
-                                            <label htmlFor="course_year" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
-                                                <GraduationCap className="w-3 h-3 text-purple-500" />
-                                                <span>Course & Year</span>
-                                            </label>
-                                            <select
-                                                id="course_year"
-                                                name="course_year"
-                                                value={formData.course_year}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 focus:border-purple-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
-                                            >
-                                                <option value="">Select Course & Year</option>
-                                                {getCourseYearOptions().length > 0 ? (
-                                                    getCourseYearOptions().map(option => (
-                                                        <option key={option} value={option} className="font-medium text-slate-800">
-                                                            {option}
-                                                        </option>
-                                                    ))
-                                                ) : (
-                                                    <option value="" disabled className="font-medium text-slate-500 italic">
-                                                        No students found for this subject
+                                    {/* Course & Year */}
+                                    <div className="group">
+                                        <label htmlFor="course_year" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
+                                            <GraduationCap className="w-3 h-3 text-purple-500" />
+                                            <span>Course & Year</span>
+                                        </label>
+                                        <select
+                                            id="course_year"
+                                            name="course_year"
+                                            value={formData.course_year}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 focus:border-purple-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                            disabled={!formData.subject_id}
+                                        >
+                                            <option value="">{formData.subject_id ? 'Select Course & Year' : 'Select a subject first'}</option>
+                                            {formData.subject_id && getCourseYearOptions().length > 0 ? (
+                                                getCourseYearOptions().map(option => (
+                                                    <option key={option} value={option} className="font-medium text-slate-800">
+                                                        {option}
                                                     </option>
-                                                )}
-                                            </select>
-                                        </div>
-                                    )}
+                                                ))
+                                            ) : formData.subject_id ? (
+                                                <option value="" disabled className="font-medium text-slate-500 italic">
+                                                    No students found for this subject
+                                                </option>
+                                            ) : null}
+                                        </select>
+                                    </div>
 
                                     {/* Schedule Button */}
                                     <div className="group">
@@ -850,22 +854,27 @@ export default function ClassSchedulePage() {
                                     </div>
                                 </div>
 
-                                {/* Row 3: Building and Room */}
+                                {/* Row 3: Subject */}
                                 <div className="group">
-                                    <label htmlFor="building_room" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
-                                        <MapPin className="w-3 h-3 text-orange-500" />
-                                        <span>Bldg. and Room No.</span>
+                                    <label htmlFor="subject_id" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
+                                        <BookOpen className="w-3 h-3 text-emerald-500" />
+                                        <span>Subject</span>
                                     </label>
-                                    <input
-                                        type="text"
-                                        id="building_room"
-                                        name="building_room"
-                                        value={formData.building_room}
-                                        onChange={handleInputChange}
-                                        className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-20 focus:border-orange-500 focus:bg-white transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm"
-                                        placeholder="e.g., LECTURE – MAKESHIFT-04 LABORATORY – COMPLAB 2"
+                                    <select
+                                        id="subject_id"
+                                        name="subject_id"
+                                        value={formData.subject_id}
+                                        onChange={(e) => handleSubjectChange(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-20 focus:border-emerald-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
                                         required
-                                    />
+                                    >
+                                        <option value="">Select Subject</option>
+                                        {subjects.map(subject => (
+                                            <option key={subject.id} value={subject.id} className="font-medium text-slate-800">
+                                                {subject.course_code} - {subject.subject_name} ({subject.department} {subject.year_level})
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 {/* Form Actions */}
@@ -1011,7 +1020,7 @@ export default function ClassSchedulePage() {
                         <div className="p-6">
                             {/* Form */}
                             <form onSubmit={handleUpdateSchedule} className="space-y-4">
-                                {/* Row 1: Teacher and Subject */}
+                                {/* Row 1: Teacher and Building and Room */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="group">
                                         <label htmlFor="edit_teacher_id" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
@@ -1036,22 +1045,22 @@ export default function ClassSchedulePage() {
                                     </div>
 
                                     <div className="group">
-                                        <label htmlFor="edit_subject_id" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
-                                            <BookOpen className="w-3 h-3 text-emerald-500" />
-                                            <span>Subject</span>
+                                        <label htmlFor="edit_building_room" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
+                                            <MapPin className="w-3 h-3 text-orange-500" />
+                                            <span>Bldg. and Room No.</span>
                                         </label>
                                         <select
-                                            id="edit_subject_id"
-                                            name="subject_id"
-                                            value={formData.subject_id}
-                                            onChange={(e) => handleSubjectChange(e.target.value)}
-                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-20 focus:border-emerald-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                            id="edit_building_room"
+                                            name="building_room"
+                                            value={formData.building_room}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-20 focus:border-orange-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
                                             required
                                         >
-                                            <option value="">Select Subject</option>
-                                            {subjects.map(subject => (
-                                                <option key={subject.id} value={subject.id} className="font-medium text-slate-800">
-                                                    {subject.course_code} - {subject.subject_name} ({subject.department} {subject.year_level})
+                                            <option value="">Select Room</option>
+                                            {rooms.map((room) => (
+                                                <option key={room.id} value={room.room_code}>
+                                                    {room.room_code}
                                                 </option>
                                             ))}
                                         </select>
@@ -1060,35 +1069,34 @@ export default function ClassSchedulePage() {
 
                                 {/* Row 2: Course & Year and Schedule */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Course & Year - Only show if subject is selected */}
-                                    {formData.subject_id && (
-                                        <div className="group">
-                                            <label htmlFor="edit_course_year" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
-                                                <GraduationCap className="w-3 h-3 text-purple-500" />
-                                                <span>Course & Year</span>
-                                            </label>
-                                            <select
-                                                id="edit_course_year"
-                                                name="course_year"
-                                                value={formData.course_year}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 focus:border-purple-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
-                                            >
-                                                <option value="">Select Course & Year</option>
-                                                {getCourseYearOptions().length > 0 ? (
-                                                    getCourseYearOptions().map(option => (
-                                                        <option key={option} value={option} className="font-medium text-slate-800">
-                                                            {option}
-                                                        </option>
-                                                    ))
-                                                ) : (
-                                                    <option value="" disabled className="font-medium text-slate-500 italic">
-                                                        No students found for this subject
+                                    {/* Course & Year */}
+                                    <div className="group">
+                                        <label htmlFor="edit_course_year" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
+                                            <GraduationCap className="w-3 h-3 text-purple-500" />
+                                            <span>Course & Year</span>
+                                        </label>
+                                        <select
+                                            id="edit_course_year"
+                                            name="course_year"
+                                            value={formData.course_year}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-20 focus:border-purple-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                            disabled={!formData.subject_id}
+                                        >
+                                            <option value="">{formData.subject_id ? 'Select Course & Year' : 'Select a subject first'}</option>
+                                            {formData.subject_id && getCourseYearOptions().length > 0 ? (
+                                                getCourseYearOptions().map(option => (
+                                                    <option key={option} value={option} className="font-medium text-slate-800">
+                                                        {option}
                                                     </option>
-                                                )}
-                                            </select>
-                                        </div>
-                                    )}
+                                                ))
+                                            ) : formData.subject_id ? (
+                                                <option value="" disabled className="font-medium text-slate-500 italic">
+                                                    No students found for this subject
+                                                </option>
+                                            ) : null}
+                                        </select>
+                                    </div>
 
                                     {/* Schedule Button */}
                                     <div className="group">
@@ -1109,22 +1117,27 @@ export default function ClassSchedulePage() {
                                     </div>
                                 </div>
 
-                                {/* Row 3: Building and Room */}
+                                {/* Row 3: Subject */}
                                 <div className="group">
-                                    <label htmlFor="edit_building_room" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
-                                        <MapPin className="w-3 h-3 text-orange-500" />
-                                        <span>Bldg. and Room No.</span>
+                                    <label htmlFor="edit_subject_id" className="text-xs font-semibold text-slate-700 mb-2 flex items-center space-x-1">
+                                        <BookOpen className="w-3 h-3 text-emerald-500" />
+                                        <span>Subject</span>
                                     </label>
-                                    <input
-                                        type="text"
-                                        id="edit_building_room"
-                                        name="building_room"
-                                        value={formData.building_room}
-                                        onChange={handleInputChange}
-                                        className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-opacity-20 focus:border-orange-500 focus:bg-white transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm"
-                                        placeholder="e.g., LECTURE – MAKESHIFT-04 LABORATORY – COMPLAB 2"
+                                    <select
+                                        id="edit_subject_id"
+                                        name="subject_id"
+                                        value={formData.subject_id}
+                                        onChange={(e) => handleSubjectChange(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gradient-to-r from-slate-50 to-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-opacity-20 focus:border-emerald-500 focus:bg-white transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
                                         required
-                                    />
+                                    >
+                                        <option value="">Select Subject</option>
+                                        {subjects.map(subject => (
+                                            <option key={subject.id} value={subject.id} className="font-medium text-slate-800">
+                                                {subject.course_code} - {subject.subject_name} ({subject.department} {subject.year_level})
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 {/* Form Actions */}

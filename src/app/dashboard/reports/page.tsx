@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useToast } from '@/components/Toast/Toast';
 import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import PizZip from 'pizzip';
@@ -75,6 +76,7 @@ interface FacultyAttendance {
 type AttendanceCategory = 'student' | 'faculty';
 
 export default function ReportsPage() {
+    const { showToast } = useToast();
     const [studentAttendanceRecords, setStudentAttendanceRecords] = useState<ClassAttendance[]>([]);
     const [facultyAttendanceRecords, setFacultyAttendanceRecords] = useState<FacultyAttendance[]>([]);
     const [activeCategory, setActiveCategory] = useState<AttendanceCategory>('student');
@@ -216,7 +218,7 @@ export default function ReportsPage() {
             saveAs(output, fileName);
         } catch (error) {
             console.error('Error generating DOCX:', error);
-            alert('Failed to generate report. Please try again.');
+            showToast('Failed to generate report. Please try again.', 'error', 5000);
         } finally {
             setGenerating(false);
         }
@@ -277,7 +279,7 @@ export default function ReportsPage() {
             saveAs(output, fileName);
         } catch (error) {
             console.error('Error generating DOCX:', error);
-            alert('Failed to generate report. Please try again.');
+            showToast('Failed to generate report. Please try again.', 'error', 5000);
         } finally {
             setGenerating(false);
         }

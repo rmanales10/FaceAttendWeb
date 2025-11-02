@@ -70,6 +70,13 @@ export interface Subject {
     updated_at?: Timestamp;
 }
 
+export interface Room {
+    id?: string;
+    room_code: string;
+    created_at?: Timestamp;
+    updated_at?: Timestamp;
+}
+
 export interface ClassSchedule {
     id?: string;
     teacher_id: string;
@@ -316,6 +323,37 @@ export const subjectService = {
 
     async deleteSubject(id: string): Promise<void> {
         await deleteDoc(doc(db, 'subjects', id));
+    }
+};
+
+// Room operations
+export const roomService = {
+    async getAllRooms(): Promise<Room[]> {
+        const querySnapshot = await getDocs(collection(db, 'rooms'));
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Room[];
+    },
+
+    async addRoom(room: Omit<Room, 'id'>): Promise<void> {
+        await addDoc(collection(db, 'rooms'), {
+            ...room,
+            created_at: Timestamp.now(),
+            updated_at: Timestamp.now()
+        });
+    },
+
+    async updateRoom(id: string, room: Partial<Room>): Promise<void> {
+        const roomRef = doc(db, 'rooms', id);
+        await updateDoc(roomRef, {
+            ...room,
+            updated_at: Timestamp.now()
+        });
+    },
+
+    async deleteRoom(id: string): Promise<void> {
+        await deleteDoc(doc(db, 'rooms', id));
     }
 };
 

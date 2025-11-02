@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { subjectService, Subject } from '@/lib/firestore';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
+import { useToast } from '@/components/Toast/Toast';
 import {
     Plus,
     Search,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function SubjectsPage() {
+    const { showToast } = useToast();
     const [subjects, setSubjects] = useState<Subject[]>([]);
     const [filteredSubjects, setFilteredSubjects] = useState<Subject[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -170,7 +172,7 @@ export default function SubjectsPage() {
             closeEditModal();
         } catch (error) {
             console.error('Error updating subject:', error);
-            alert('Error updating subject. Please try again.');
+            showToast('Error updating subject. Please try again.', 'error', 5000);
         } finally {
             setIsUpdating(false);
         }
@@ -207,7 +209,7 @@ export default function SubjectsPage() {
             });
         } catch (error) {
             console.error('Error adding subject:', error);
-            alert('Error adding subject. Please try again.');
+            showToast('Error adding subject. Please try again.', 'error', 5000);
         } finally {
             setIsSubmitting(false);
         }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { userService, Teacher } from '@/lib/firestore';
+import { useToast } from '@/components/Toast/Toast';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import {
     Search,
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function TeachersPage() {
+    const { showToast } = useToast();
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [filteredTeachers, setFilteredTeachers] = useState<Teacher[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -80,8 +82,8 @@ export default function TeachersPage() {
         setIsDeleting(true);
         try {
             // Note: This would need to be implemented in userService
-            // For now, we'll just show an alert
-            alert('Delete functionality will be implemented in userService');
+            // For now, we'll just show a toast
+            showToast('Delete functionality will be implemented in userService', 'info', 5000);
             // await userService.deleteUser(teacherToDelete.id);
             // await fetchTeachers();
             setShowDeleteModal(false);
@@ -143,14 +145,14 @@ export default function TeachersPage() {
         setIsUpdating(true);
         try {
             // Note: This would need to be implemented in userService
-            // For now, we'll just show an alert
-            alert('Update functionality will be implemented in userService');
+            // For now, we'll just show a toast
+            showToast('Update functionality will be implemented in userService', 'info', 5000);
             // await userService.updateUser(teacherToEdit.id, formData);
             // await fetchTeachers();
             closeEditModal();
         } catch (error) {
             console.error('Error updating teacher:', error);
-            alert('Error updating teacher. Please try again.');
+            showToast('Error updating teacher. Please try again.', 'error', 5000);
         } finally {
             setIsUpdating(false);
         }

@@ -17,7 +17,8 @@ import {
     ScanFace,
     Menu,
     X,
-    FileText
+    FileText,
+    Building2
 } from 'lucide-react';
 
 const menuItems = [
@@ -25,6 +26,7 @@ const menuItems = [
     { id: 'teachers', label: 'Teachers', icon: Users, path: '/dashboard/teachers' },
     { id: 'students', label: 'Students', icon: GraduationCap, path: '/dashboard/students' },
     { id: 'subjects', label: 'Subjects', icon: BookOpen, path: '/dashboard/subjects' },
+    { id: 'rooms', label: 'Rooms', icon: Building2, path: '/dashboard/rooms' },
     { id: 'class-schedule', label: 'Class Schedule', icon: Calendar, path: '/dashboard/class-schedule' },
     { id: 'face-training', label: 'Face Training', icon: Camera, path: '/dashboard/face-training' },
     { id: 'face-recognition', label: 'Face Recognition', icon: ScanFace, path: '/dashboard/face-recognition' },

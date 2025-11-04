@@ -177,7 +177,7 @@ export default function ReportsPage() {
             const studentsData = attendanceStudents.map((record, index) => {
                 // Determine attendance symbol based on state field
                 let attendanceSymbol = 'X';
-                const state = (record as any).state || record.status;
+                const state = record.state || record.status;
                 if (state === 'Present' || state === 'present') {
                     attendanceSymbol = '✓';
                 } else if (state === 'Late' || state === 'late') {

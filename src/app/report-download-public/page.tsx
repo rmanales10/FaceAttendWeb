@@ -13,6 +13,7 @@ interface AttendanceRecord {
     student_id: string;
     student_name: string;
     status: 'present' | 'absent' | 'late';
+    state?: 'Present' | 'Late' | 'Absent';
     attendance_type?: 'face' | 'manual';
 }
 
@@ -125,12 +126,25 @@ function ReportDownloadContent() {
             const attendanceStudents = attendanceData.attendance_records || [];
 
             // Prepare student data for the template
-            const studentsData = attendanceStudents.map((record, index) => ({
-                no: (index + 1).toString(),
-                name: record.student_name || 'N/A',
-                course_year: attendanceData.class_schedule?.course_year || attendanceData.section || 'N/A',
-                attendance: record.status === 'present' ? '✓' : 'X'
-            }));
+            const studentsData = attendanceStudents.map((record, index) => {
+                // Determine attendance symbol based on state field
+                let attendanceSymbol = 'X';
+                const state = (record as any).state || record.status;
+                if (state === 'Present' || state === 'present') {
+                    attendanceSymbol = '✓';
+                } else if (state === 'Late' || state === 'late') {
+                    attendanceSymbol = 'L';
+                } else {
+                    attendanceSymbol = 'X';
+                }
+
+                return {
+                    no: (index + 1).toString(),
+                    name: record.student_name || 'N/A',
+                    course_year: attendanceData.class_schedule?.course_year || attendanceData.section || 'N/A',
+                    attendance: attendanceSymbol
+                };
+            });
 
             // Fetch the template file
             const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');

@@ -29,9 +29,9 @@ const menuItems = [
     { id: 'rooms', label: 'Rooms', icon: Building2, path: '/dashboard/rooms' },
     { id: 'class-schedule', label: 'Class Schedule', icon: Calendar, path: '/dashboard/class-schedule' },
     { id: 'face-training', label: 'Face Training', icon: Camera, path: '/dashboard/face-training' },
-    { id: 'face-recognition', label: 'Face Recognition', icon: ScanFace, path: '/dashboard/face-recognition' },
+    // { id: 'face-recognition', label: 'Face Recognition', icon: ScanFace, path: '/dashboard/face-recognition' },
     { id: 'reports', label: 'Reports', icon: FileText, path: '/dashboard/reports' },
-    { id: 'activity-logs', label: 'Activity Logs', icon: History, path: '/dashboard/activity-logs' },
+    // { id: 'activity-logs', label: 'Activity Logs', icon: History, path: '/dashboard/activity-logs' },
 ];
 
 export default function Sidebar() {
@@ -67,7 +67,7 @@ export default function Sidebar() {
                             />
                         </div>
                         <div>
-                            <h1 className="text-lg font-bold text-slate-800">Tap Attend</h1>
+                            <h1 className="text-lg font-bold text-slate-800">Face Attend</h1>
                         </div>
                     </div>
                     <button
@@ -109,7 +109,7 @@ export default function Sidebar() {
                                 />
                             </div>
                             <div>
-                                <h1 className="text-xl font-bold text-slate-800">Tap Attend</h1>
+                                <h1 className="text-xl font-bold text-slate-800">Face Attend</h1>
                                 <p className="text-slate-500 text-sm">Admin Panel</p>
                             </div>
                         </div>

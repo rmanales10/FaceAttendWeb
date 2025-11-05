@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/components/Toast/Toast';
-import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle } from 'lucide-react';
+import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle, User } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
@@ -84,6 +84,7 @@ export default function ReportsPage() {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
 
     useEffect(() => {
         fetchData();
@@ -302,7 +303,30 @@ export default function ReportsPage() {
     const currentRecords = activeCategory === 'student' ? studentAttendanceRecords : facultyAttendanceRecords;
     const totalRecords = activeCategory === 'student' ? studentAttendanceRecords.length : facultyAttendanceRecords.length;
 
+    // Get unique teachers from records
+    const getUniqueTeachers = (): string[] => {
+        const teachers = new Set<string>();
+        currentRecords.forEach(record => {
+            const teacherName = record.class_schedule?.teacher_name;
+            if (teacherName && teacherName.trim()) {
+                teachers.add(teacherName.trim());
+            }
+        });
+        return Array.from(teachers).sort();
+    };
+
+    const uniqueTeachers = getUniqueTeachers();
+
     const filteredRecords = currentRecords.filter(record => {
+        // Filter by teacher first
+        if (selectedTeacher) {
+            const teacherName = record.class_schedule?.teacher_name?.trim();
+            if (teacherName !== selectedTeacher) {
+                return false;
+            }
+        }
+
+        // Then filter by search query
         const searchLower = searchQuery.toLowerCase();
         if (activeCategory === 'student') {
             const studentRecord = record as ClassAttendance;
@@ -310,7 +334,8 @@ export default function ReportsPage() {
                 (studentRecord.class_schedule?.subject_name || studentRecord.subject || '').toLowerCase().includes(searchLower) ||
                 (studentRecord.class_schedule?.course_code || '').toLowerCase().includes(searchLower) ||
                 (studentRecord.class_schedule?.course_year || studentRecord.section || '').toLowerCase().includes(searchLower) ||
-                formatDate(studentRecord.date || studentRecord.attendance_date).toLowerCase().includes(searchLower)
+                formatDate(studentRecord.date || studentRecord.attendance_date).toLowerCase().includes(searchLower) ||
+                (studentRecord.class_schedule?.teacher_name || '').toLowerCase().includes(searchLower)
             );
         } else {
             const facultyRecord = record as FacultyAttendance;
@@ -318,7 +343,8 @@ export default function ReportsPage() {
                 (facultyRecord.class_schedule?.subject_name || facultyRecord.subject || '').toLowerCase().includes(searchLower) ||
                 (facultyRecord.class_schedule?.course_code || '').toLowerCase().includes(searchLower) ||
                 (facultyRecord.department || '').toLowerCase().includes(searchLower) ||
-                formatDate(facultyRecord.date || facultyRecord.attendance_date).toLowerCase().includes(searchLower)
+                formatDate(facultyRecord.date || facultyRecord.attendance_date).toLowerCase().includes(searchLower) ||
+                (facultyRecord.class_schedule?.teacher_name || '').toLowerCase().includes(searchLower)
             );
         }
     });
@@ -355,7 +381,10 @@ export default function ReportsPage() {
             <div className="mb-6 sm:mb-8">
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-slate-200 inline-flex space-x-2">
                     <button
-                        onClick={() => setActiveCategory('student')}
+                        onClick={() => {
+                            setActiveCategory('student');
+                            setSelectedTeacher(null); // Reset teacher filter when switching category
+                        }}
                         className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeCategory === 'student'
                             ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
                             : 'text-slate-600 hover:bg-slate-50'
@@ -369,7 +398,10 @@ export default function ReportsPage() {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveCategory('faculty')}
+                        onClick={() => {
+                            setActiveCategory('faculty');
+                            setSelectedTeacher(null); // Reset teacher filter when switching category
+                        }}
                         className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeCategory === 'faculty'
                             ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
                             : 'text-slate-600 hover:bg-slate-50'
@@ -385,13 +417,59 @@ export default function ReportsPage() {
                 </div>
             </div>
 
+            {/* Teacher Filter */}
+            {uniqueTeachers.length > 0 && (
+                <div className="mb-6">
+                    <div className="flex items-center space-x-2 mb-3">
+                        <User className="w-5 h-5 text-indigo-500" />
+                        <h3 className="text-sm font-semibold text-slate-700">Filter by Teacher:</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            onClick={() => setSelectedTeacher(null)}
+                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${selectedTeacher === null
+                                ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md'
+                                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                }`}
+                        >
+                            <Users className="w-4 h-4" />
+                            <span>All Teachers</span>
+                        </button>
+                        {uniqueTeachers.map((teacher) => {
+                            const teacherRecordCount = currentRecords.filter(
+                                record => record.class_schedule?.teacher_name?.trim() === teacher
+                            ).length;
+                            return (
+                                <button
+                                    key={teacher}
+                                    onClick={() => setSelectedTeacher(teacher)}
+                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 flex items-center space-x-2 ${selectedTeacher === teacher
+                                        ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-md'
+                                        : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    <User className="w-4 h-4" />
+                                    <span>{teacher}</span>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${selectedTeacher === teacher
+                                        ? 'bg-white text-indigo-600'
+                                        : 'bg-indigo-100 text-indigo-700'
+                                        }`}>
+                                        {teacherRecordCount}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* Search Bar */}
             <div className="mb-6">
                 <div className="relative max-w-full sm:max-w-lg">
                     <FileText className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
                     <input
                         type="text"
-                        placeholder="Search by subject, course code, or date..."
+                        placeholder="Search by subject, course code, teacher, or date..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm sm:text-base"
@@ -405,8 +483,21 @@ export default function ReportsPage() {
                     <FileText className="w-20 h-20 mx-auto mb-4 text-slate-300" />
                     <h3 className="text-xl font-semibold text-slate-800 mb-2">No Attendance Records Found</h3>
                     <p className="text-slate-600">
-                        {searchQuery ? 'Try adjusting your search criteria' : `No ${activeCategory} attendance records available yet`}
+                        {selectedTeacher
+                            ? `No records found for ${selectedTeacher}. Try selecting a different teacher or clearing the filter.`
+                            : searchQuery
+                                ? 'Try adjusting your search criteria'
+                                : `No ${activeCategory} attendance records available yet`
+                        }
                     </p>
+                    {selectedTeacher && (
+                        <button
+                            onClick={() => setSelectedTeacher(null)}
+                            className="mt-4 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+                        >
+                            Clear Teacher Filter
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -453,6 +544,12 @@ export default function ReportsPage() {
                                             }
                                         </span>
                                     </div>
+                                    {(record.class_schedule?.teacher_name) && (
+                                        <div className="flex items-center text-sm text-slate-600">
+                                            <User className="w-4 h-4 mr-2 text-indigo-500" />
+                                            <span className="font-medium">{record.class_schedule.teacher_name}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Stats */}
@@ -472,13 +569,24 @@ export default function ReportsPage() {
                                 {/* Generate Button */}
                                 <button
                                     onClick={() => isStudent ? generateStudentDOCX(studentRecord!) : generateFacultyDOCX(facultyRecord!)}
-                                    disabled={generating}
-                                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-md hover:shadow-lg"
+                                    disabled={generating || !record.is_submitted}
+                                    className={`w-full px-4 py-3 rounded-xl transition-all flex items-center justify-center space-x-2 font-medium shadow-md ${!record.is_submitted
+                                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                                            : generating
+                                                ? 'bg-blue-400 text-white cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 hover:shadow-lg'
+                                        }`}
+                                    title={!record.is_submitted ? 'Please submit attendance before generating report' : 'Generate attendance report'}
                                 >
                                     {generating ? (
                                         <>
                                             <Loader2 className="w-5 h-5 animate-spin" />
                                             <span>Generating...</span>
+                                        </>
+                                    ) : !record.is_submitted ? (
+                                        <>
+                                            <Download className="w-5 h-5" />
+                                            <span>Submit First to Generate</span>
                                         </>
                                     ) : (
                                         <>

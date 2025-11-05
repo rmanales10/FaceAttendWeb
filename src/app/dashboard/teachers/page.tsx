@@ -3,11 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { userService, Teacher } from '@/lib/firestore';
 import { useToast } from '@/components/Toast/Toast';
-import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import {
     Search,
     Edit,
-    Trash2,
     Eye,
     Users,
     Mail,
@@ -22,13 +20,10 @@ export default function TeachersPage() {
     const [filteredTeachers, setFilteredTeachers] = useState<Teacher[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [loading, setLoading] = useState(true);
-    const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
-    const [teacherToDelete, setTeacherToDelete] = useState<Teacher | null>(null);
     const [teacherToView, setTeacherToView] = useState<Teacher | null>(null);
     const [teacherToEdit, setTeacherToEdit] = useState<Teacher | null>(null);
-    const [isDeleting, setIsDeleting] = useState(false);
     const [isUpdating, setIsUpdating] = useState(false);
     const [formData, setFormData] = useState({
         full_name: '',
@@ -70,35 +65,6 @@ export default function TeachersPage() {
         );
         setFilteredTeachers(filtered);
     }, [teachers, searchQuery]);
-
-    const handleDeleteTeacher = (teacher: Teacher) => {
-        setTeacherToDelete(teacher);
-        setShowDeleteModal(true);
-    };
-
-    const confirmDelete = async () => {
-        if (!teacherToDelete?.id) return;
-
-        setIsDeleting(true);
-        try {
-            // Note: This would need to be implemented in userService
-            // For now, we'll just show a toast
-            showToast('Delete functionality will be implemented in userService', 'info', 5000);
-            // await userService.deleteUser(teacherToDelete.id);
-            // await fetchTeachers();
-            setShowDeleteModal(false);
-            setTeacherToDelete(null);
-        } catch (error) {
-            console.error('Error deleting teacher:', error);
-        } finally {
-            setIsDeleting(false);
-        }
-    };
-
-    const closeDeleteModal = () => {
-        setShowDeleteModal(false);
-        setTeacherToDelete(null);
-    };
 
     const handleViewTeacher = (teacher: Teacher) => {
         setTeacherToView(teacher);
@@ -144,11 +110,12 @@ export default function TeachersPage() {
 
         setIsUpdating(true);
         try {
-            // Note: This would need to be implemented in userService
-            // For now, we'll just show a toast
-            showToast('Update functionality will be implemented in userService', 'info', 5000);
-            // await userService.updateUser(teacherToEdit.id, formData);
-            // await fetchTeachers();
+            // Only update the department field (Full Name and Email are read-only)
+            await userService.updateUser(teacherToEdit.id, {
+                department: formData.department
+            });
+            showToast('Teacher department updated successfully!', 'success', 5000);
+            await fetchTeachers();
             closeEditModal();
         } catch (error) {
             console.error('Error updating teacher:', error);
@@ -315,13 +282,6 @@ export default function TeachersPage() {
                                                 >
                                                     <Edit className="w-3.5 h-3.5" />
                                                 </button>
-                                                <button
-                                                    onClick={() => handleDeleteTeacher(teacher)}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-all duration-200 hover:scale-110"
-                                                    title="Delete Teacher"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -456,12 +416,13 @@ export default function TeachersPage() {
                                             id="edit_full_name"
                                             name="full_name"
                                             value={formData.full_name}
-                                            onChange={handleInputChange}
-                                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm hover:border-blue-400"
+                                            disabled
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 placeholder-slate-400 text-sm cursor-not-allowed"
                                             placeholder="Enter teacher's full name"
-                                            required
+                                            readOnly
                                         />
                                     </div>
+                                    <p className="text-xs text-slate-500 mt-1">Full name cannot be edited</p>
                                 </div>
 
                                 {/* Email */}
@@ -476,12 +437,13 @@ export default function TeachersPage() {
                                             id="edit_email"
                                             name="email"
                                             value={formData.email}
-                                            onChange={handleInputChange}
-                                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm hover:border-emerald-400"
+                                            disabled
+                                            className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-600 placeholder-slate-400 text-sm cursor-not-allowed"
                                             placeholder="Enter teacher's email"
-                                            required
+                                            readOnly
                                         />
                                     </div>
+                                    <p className="text-xs text-slate-500 mt-1">Email cannot be edited</p>
                                 </div>
 
                                 {/* Department */}
@@ -496,13 +458,13 @@ export default function TeachersPage() {
                                             name="department"
                                             value={formData.department}
                                             onChange={handleInputChange}
-                                            className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer hover:border-purple-400"
+                                            className="w-full px-3 py-2 bg-white border-2 border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer hover:border-purple-400 shadow-sm"
                                             required
                                         >
                                             <option value="">Select Department</option>
-                                            <option value="BSIT">BSIT - Bachelor of Science in Information Technology</option>
-                                            <option value="BFPT">BFPT - Bachelor of Food Processing Technology</option>
-                                            <option value="BTLED">BTLED - Bachelor of Technology and Livelihood Education</option>
+                                            <option value="BSIT - Bachelor of Science in Information Technology">BSIT - Bachelor of Science in Information Technology</option>
+                                            <option value="BFPT - Bachelor of Food Processing Technology">BFPT - Bachelor of Food Processing Technology</option>
+                                            <option value="BTLED - Bachelor of Technology and Livelihood Education">BTLED - Bachelor of Technology and Livelihood Education</option>
                                             <option value="General">General</option>
                                         </select>
                                     </div>
@@ -541,18 +503,6 @@ export default function TeachersPage() {
                 </div>
             )}
 
-            {/* Delete Confirmation Modal */}
-            <DeleteConfirmationModal
-                isOpen={showDeleteModal}
-                onClose={closeDeleteModal}
-                onConfirm={confirmDelete}
-                title="Delete Teacher"
-                message="Are you sure you want to delete this teacher? This action cannot be undone and will permanently remove the teacher from the system."
-                itemName={teacherToDelete ? `${teacherToDelete.full_name} (${teacherToDelete.email})` : undefined}
-                isLoading={isDeleting}
-                confirmText="Delete Teacher"
-                cancelText="Cancel"
-            />
         </div>
     );
 }

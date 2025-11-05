@@ -21,7 +21,9 @@ import {
     Square,
     Camera,
     Loader2,
-    Save
+    Save,
+    Copy,
+    Link as LinkIcon
 } from 'lucide-react';
 import { useToast } from '@/components/Toast/Toast';
 
@@ -634,6 +636,48 @@ function FaceRecognitionContent() {
                                 <p className="text-indigo-600">{students.length} trained student(s) in this class</p>
                             </div>
                         )}
+                        {/* Copy Link Section */}
+                        <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                    <LinkIcon className="w-5 h-5 text-indigo-500 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-semibold text-slate-700 mb-1">Share Link</p>
+                                        <p className="text-xs text-slate-500 truncate" id="share-link-text">
+                                            {typeof window !== 'undefined' ? window.location.href : ''}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        const url = window.location.href;
+                                        try {
+                                            await navigator.clipboard.writeText(url);
+                                            showToast('Link copied to clipboard!', 'success', 3000);
+                                        } catch (err) {
+                                            // Fallback for older browsers
+                                            const textArea = document.createElement('textarea');
+                                            textArea.value = url;
+                                            textArea.style.position = 'fixed';
+                                            textArea.style.opacity = '0';
+                                            document.body.appendChild(textArea);
+                                            textArea.select();
+                                            try {
+                                                document.execCommand('copy');
+                                                showToast('Link copied to clipboard!', 'success', 3000);
+                                            } catch (fallbackErr) {
+                                                showToast('Failed to copy link', 'error', 3000);
+                                            }
+                                            document.body.removeChild(textArea);
+                                        }
+                                    }}
+                                    className="ml-3 px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-lg hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 flex items-center space-x-2 font-semibold text-sm shadow-md hover:shadow-lg flex-shrink-0"
+                                >
+                                    <Copy className="w-4 h-4" />
+                                    <span>Copy Link</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

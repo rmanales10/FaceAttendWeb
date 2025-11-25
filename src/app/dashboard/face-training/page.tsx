@@ -16,10 +16,13 @@ import {
     Loader2,
     Video,
     ImagePlus,
-    UserCircle
+    UserCircle,
+    QrCode,
+    Copy
 } from 'lucide-react';
 import { useToast } from '@/hooks/useToast';
 import { ToastContainer } from '@/components/Toast';
+import { QRCodeSVG } from 'qrcode.react';
 
 type PersonType = 'student' | 'teacher';
 type Person = (Student | User) & { type: PersonType };
@@ -38,8 +41,13 @@ export default function FaceTrainingPage() {
     const [trainingImages, setTrainingImages] = useState<string[]>([]);
     const [isCapturing, setIsCapturing] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isCapturingContinuously, setIsCapturingContinuously] = useState(false);
+    const [captureInterval, setCaptureInterval] = useState<NodeJS.Timeout | null>(null);
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user'); // 'user' = front, 'environment' = rear
     const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+    const [showQRModal, setShowQRModal] = useState(false);
+    const [qrPerson, setQrPerson] = useState<Person | null>(null);
+    const [qrCodeSize, setQrCodeSize] = useState(200);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +55,16 @@ export default function FaceTrainingPage() {
     useEffect(() => {
         loadModels();
         fetchData();
+    }, []);
+
+    useEffect(() => {
+        const updateQrCodeSize = () => {
+            setQrCodeSize(window.innerWidth < 640 ? 160 : 200);
+        };
+
+        updateQrCodeSize();
+        window.addEventListener('resize', updateQrCodeSize);
+        return () => window.removeEventListener('resize', updateQrCodeSize);
     }, []);
 
     useEffect(() => {
@@ -202,6 +220,7 @@ export default function FaceTrainingPage() {
     };
 
     const stopCamera = () => {
+        stopContinuousCapture();
         if (videoRef.current && videoRef.current.srcObject) {
             const stream = videoRef.current.srcObject as MediaStream;
             stream.getTracks().forEach(track => track.stop());
@@ -220,7 +239,19 @@ export default function FaceTrainingPage() {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
+        // Save context state
+        ctx.save();
+
+        // Mirror the image if using front camera
+        if (facingMode === 'user') {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
         ctx.drawImage(video, 0, 0);
+
+        // Restore context state
+        ctx.restore();
+
         const imageData = canvas.toDataURL('image/jpeg', 0.9);
 
         try {
@@ -232,14 +263,49 @@ export default function FaceTrainingPage() {
                 .withFaceDescriptor();
 
             if (!detection) {
-                warning('No face detected. Please position your face clearly in the camera.');
+                if (!isCapturingContinuously) {
+                    warning('No face detected. Please position your face clearly in the camera.');
+                }
                 return;
             }
 
             setTrainingImages(prev => [...prev, imageData]);
         } catch (err) {
             console.error('Error detecting face:', err);
-            showError('Error detecting face. Please try again.');
+            if (!isCapturingContinuously) {
+                showError('Error detecting face. Please try again.');
+            }
+        }
+    };
+
+    const toggleContinuousCapture = () => {
+        if (!modelsLoaded) return;
+
+        if (isCapturingContinuously) {
+            // Stop capturing
+            setIsCapturingContinuously(false);
+            if (captureInterval) {
+                clearInterval(captureInterval);
+                setCaptureInterval(null);
+            }
+        } else {
+            // Start capturing
+            setIsCapturingContinuously(true);
+            // Capture immediately
+            captureImage();
+            // Then capture every 100ms
+            const interval = setInterval(() => {
+                captureImage();
+            }, 100);
+            setCaptureInterval(interval);
+        }
+    };
+
+    const stopContinuousCapture = () => {
+        setIsCapturingContinuously(false);
+        if (captureInterval) {
+            clearInterval(captureInterval);
+            setCaptureInterval(null);
         }
     };
 
@@ -354,6 +420,7 @@ export default function FaceTrainingPage() {
     };
 
     const closeTrainingModal = () => {
+        stopContinuousCapture();
         stopCamera();
         setShowTrainingModal(false);
         setSelectedPerson(null);
@@ -368,6 +435,27 @@ export default function FaceTrainingPage() {
             .join('')
             .toUpperCase()
             .slice(0, 2);
+    };
+
+    const showQRCode = (person: Person) => {
+        setQrPerson(person);
+        setShowQRModal(true);
+    };
+
+    const closeQRModal = () => {
+        setShowQRModal(false);
+        setQrPerson(null);
+    };
+
+    const copyTrainingLink = async () => {
+        if (!qrPerson) return;
+        const link = `${window.location.origin}/face-training-public?id=${qrPerson.id}&type=${qrPerson.type}`;
+        try {
+            await navigator.clipboard.writeText(link);
+            success('Training link copied to clipboard!');
+        } catch (err) {
+            showError('Failed to copy link. Please copy manually.');
+        }
     };
 
     const getTrainingStats = () => {
@@ -629,18 +717,28 @@ export default function FaceTrainingPage() {
                                                 </span>
                                             </td>
                                             <td className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 lg:py-5 text-right">
-                                                <button
-                                                    onClick={() => handleTrainPerson(person)}
-                                                    disabled={!modelsLoaded}
-                                                    className={`inline-flex items-center px-3 sm:px-4 lg:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 shadow-md hover:shadow-lg font-semibold text-xs sm:text-sm space-x-1 sm:space-x-2 ${modelsLoaded
-                                                        ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
-                                                        : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                                        }`}
-                                                >
-                                                    <Camera className="w-3 h-3 sm:w-4 sm:h-4" />
-                                                    <span className="hidden sm:inline">{isTrained ? 'Retrain' : 'Train'}</span>
-                                                    <span className="sm:hidden">Train</span>
-                                                </button>
+                                                <div className="flex items-center justify-end space-x-2">
+                                                    <button
+                                                        onClick={() => handleTrainPerson(person)}
+                                                        disabled={!modelsLoaded}
+                                                        className={`inline-flex items-center px-3 sm:px-4 lg:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 shadow-md hover:shadow-lg font-semibold text-xs sm:text-sm space-x-1 sm:space-x-2 ${modelsLoaded
+                                                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
+                                                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                                                            }`}
+                                                    >
+                                                        <Camera className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                        <span className="hidden sm:inline">{isTrained ? 'Retrain' : 'Train'}</span>
+                                                        <span className="sm:hidden">Train</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => showQRCode(person)}
+                                                        className="inline-flex items-center px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg sm:rounded-xl transition-all duration-200 shadow-md hover:shadow-lg font-semibold text-xs sm:text-sm space-x-1 sm:space-x-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
+                                                        title="Show QR Code for self-training"
+                                                    >
+                                                        <QrCode className="w-3 h-3 sm:w-4 sm:h-4" />
+                                                        <span className="hidden lg:inline">QR</span>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -701,7 +799,7 @@ export default function FaceTrainingPage() {
                                             ref={videoRef}
                                             autoPlay
                                             playsInline
-                                            className="w-full h-full object-cover"
+                                            className={`w-full h-full object-cover ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
                                         />
                                         {!isCapturing && (
                                             <div className="absolute inset-0 flex items-center justify-center bg-slate-800">
@@ -726,12 +824,15 @@ export default function FaceTrainingPage() {
                                             ) : (
                                                 <>
                                                     <button
-                                                        onClick={captureImage}
-                                                        disabled={isProcessing}
-                                                        className="flex-1 px-4 py-2.5 bg-purple-500 text-white rounded-xl hover:bg-purple-600 transition-all font-semibold text-sm flex items-center justify-center space-x-2"
+                                                        onClick={toggleContinuousCapture}
+                                                        disabled={isProcessing || !modelsLoaded}
+                                                        className={`flex-1 px-4 py-2.5 rounded-xl transition-all font-semibold text-sm flex items-center justify-center space-x-2 ${isCapturingContinuously
+                                                            ? 'bg-red-500 text-white hover:bg-red-600'
+                                                            : 'bg-purple-500 text-white hover:bg-purple-600'
+                                                            } ${isProcessing || !modelsLoaded ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                     >
                                                         <Camera className="w-4 h-4" />
-                                                        <span>Capture</span>
+                                                        <span>{isCapturingContinuously ? 'Stop Training' : 'Start Training'}</span>
                                                     </button>
                                                     <button
                                                         onClick={stopCamera}
@@ -859,6 +960,104 @@ export default function FaceTrainingPage() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* QR Code Modal */}
+            {showQRModal && qrPerson && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto" onClick={closeQRModal}>
+                    <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-lg w-full p-4 sm:p-6 my-auto" onClick={(e) => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="flex items-center justify-between mb-3 sm:mb-4">
+                            <h2 className="text-lg sm:text-xl font-bold text-slate-800">Self-Training QR Code</h2>
+                            <button
+                                onClick={closeQRModal}
+                                className="text-slate-400 hover:text-slate-600 transition-colors p-1"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Person Info - Compact */}
+                        <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg sm:rounded-xl">
+                            <div className="flex items-center space-x-2 sm:space-x-2.5">
+                                <div className={`w-9 h-9 sm:w-10 sm:h-10 bg-gradient-to-r ${qrPerson.type === 'student'
+                                    ? 'from-blue-500 to-blue-600'
+                                    : 'from-purple-500 to-purple-600'
+                                    } rounded-lg flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0`}>
+                                    {getInitials(qrPerson.type === 'student'
+                                        ? (qrPerson as Student).full_name
+                                        : (qrPerson as User).fullname)}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="font-semibold text-slate-800 text-xs sm:text-sm truncate">
+                                        {qrPerson.type === 'student'
+                                            ? (qrPerson as Student).full_name
+                                            : (qrPerson as User).fullname}
+                                    </p>
+                                    <p className="text-xs text-slate-600 capitalize">{qrPerson.type}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* QR Code and Link - Side by Side on larger screens */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
+                            {/* QR Code */}
+                            <div className="flex justify-center items-center p-2 sm:p-3 bg-white border-2 border-slate-200 rounded-lg sm:rounded-xl min-h-[180px] sm:min-h-[220px] md:min-h-[220px]">
+                                <QRCodeSVG
+                                    value={`${window.location.origin}/face-training-public?id=${qrPerson.id}&type=${qrPerson.type}`}
+                                    size={qrCodeSize}
+                                    level="H"
+                                    includeMargin={true}
+                                />
+                            </div>
+
+                            {/* Training Link and Instructions - Stacked */}
+                            <div className="flex flex-col justify-between space-y-2.5 sm:space-y-3 min-h-[180px] sm:min-h-[220px] md:min-h-[220px]">
+                                {/* Training Link */}
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-700 mb-1 sm:mb-1.5">
+                                        Training Link:
+                                    </label>
+                                    <div className="flex items-center space-x-1 sm:space-x-1.5 bg-slate-50 border border-slate-200 rounded-lg p-1.5 sm:p-2">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={`${window.location.origin}/face-training-public?id=${qrPerson.id}&type=${qrPerson.type}`}
+                                            className="flex-1 bg-transparent text-[10px] sm:text-xs text-slate-700 outline-none truncate"
+                                        />
+                                        <button
+                                            onClick={copyTrainingLink}
+                                            className="px-2 sm:px-2.5 py-1 sm:py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors flex items-center space-x-1 flex-shrink-0"
+                                            title="Copy link"
+                                        >
+                                            <Copy className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                                            <span className="text-[10px] sm:text-xs font-semibold">Copy</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Instructions - Compact */}
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 sm:p-2.5 flex-1 flex flex-col justify-center">
+                                    <p className="text-[10px] sm:text-xs text-blue-800 font-semibold mb-1 sm:mb-1.5">📱 How to use:</p>
+                                    <ol className="text-[10px] sm:text-xs text-blue-700 space-y-0.5 list-decimal list-inside leading-relaxed">
+                                        <li>Open camera app on your phone</li>
+                                        <li>Point at the QR code</li>
+                                        <li>Tap the notification to open</li>
+                                        <li>Complete face training</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Close Button */}
+                        <button
+                            onClick={closeQRModal}
+                            className="w-full px-4 py-2 sm:py-2.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg sm:rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all font-semibold text-xs sm:text-sm shadow-md"
+                        >
+                            Close
+                        </button>
                     </div>
                 </div>
             )}

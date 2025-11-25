@@ -1,13 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/components/Toast/Toast';
-import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle, User } from 'lucide-react';
+import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle, User, Upload, X, FileUp } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
+import { templateStorage } from '@/lib/templateStorage';
 
 interface AttendanceRecord {
     student_id: string;
@@ -85,9 +86,15 @@ export default function ReportsPage() {
     const [generating, setGenerating] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null);
+    const [uploadingTemplate, setUploadingTemplate] = useState(false);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [hasTemplate, setHasTemplate] = useState(false);
+    const [templateFileName, setTemplateFileName] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchData();
+        checkTemplateExists();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -138,6 +145,72 @@ export default function ReportsPage() {
         } catch (error) {
             console.error('Error fetching faculty attendance:', error);
             return [];
+        }
+    };
+
+    const checkTemplateExists = async () => {
+        try {
+            const exists = await templateStorage.hasTemplate();
+            setHasTemplate(exists);
+            if (exists) {
+                // Try to get template info from localStorage
+                const savedFileName = localStorage.getItem('template_file_name');
+                setTemplateFileName(savedFileName);
+            }
+        } catch (error) {
+            console.error('Error checking template:', error);
+        }
+    };
+
+    const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        if (!file.name.endsWith('.docx')) {
+            showToast('Please upload a .docx file', 'error', 5000);
+            return;
+        }
+
+        // Validate file size (max 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+            showToast('File size must be less than 10MB', 'error', 5000);
+            return;
+        }
+
+        setUploadingTemplate(true);
+        try {
+            // Save to IndexedDB (client-side storage)
+            await templateStorage.saveTemplate(file);
+
+            // Save file name to localStorage for display
+            localStorage.setItem('template_file_name', file.name);
+            setTemplateFileName(file.name);
+            setHasTemplate(true);
+
+            showToast('Template uploaded successfully!', 'success', 5000);
+            setShowUploadModal(false);
+        } catch (error) {
+            console.error('Error uploading template:', error);
+            showToast('Failed to upload template. Please try again.', 'error', 5000);
+        } finally {
+            setUploadingTemplate(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
+    const handleDeleteTemplate = async () => {
+        try {
+            await templateStorage.deleteTemplate();
+            localStorage.removeItem('template_file_name');
+            setHasTemplate(false);
+            setTemplateFileName(null);
+            showToast('Template deleted successfully', 'success', 3000);
+        } catch (error) {
+            console.error('Error deleting template:', error);
+            showToast('Failed to delete template', 'error', 3000);
         }
     };
 
@@ -195,9 +268,17 @@ export default function ReportsPage() {
                 };
             });
 
-            // Fetch the template file
-            const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
-            const templateArrayBuffer = await templateResponse.arrayBuffer();
+            // Fetch the template file from IndexedDB or fallback to public folder
+            let templateArrayBuffer: ArrayBuffer;
+            const storedTemplate = await templateStorage.getTemplate();
+
+            if (storedTemplate) {
+                templateArrayBuffer = storedTemplate;
+            } else {
+                // Fallback to default template in public folder
+                const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
+                templateArrayBuffer = await templateResponse.arrayBuffer();
+            }
 
             // Load the template
             const zip = new PizZip(templateArrayBuffer);
@@ -256,9 +337,17 @@ export default function ReportsPage() {
                 attendance: record.status === 'present' ? '✓' : 'X'
             }));
 
-            // Fetch the template file
-            const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
-            const templateArrayBuffer = await templateResponse.arrayBuffer();
+            // Fetch the template file from IndexedDB or fallback to public folder
+            let templateArrayBuffer: ArrayBuffer;
+            const storedTemplate = await templateStorage.getTemplate();
+
+            if (storedTemplate) {
+                templateArrayBuffer = storedTemplate;
+            } else {
+                // Fallback to default template in public folder
+                const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
+                templateArrayBuffer = await templateResponse.arrayBuffer();
+            }
 
             // Load the template
             const zip = new PizZip(templateArrayBuffer);
@@ -368,13 +457,38 @@ export default function ReportsPage() {
                         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 mb-1 sm:mb-2">Attendance Reports</h1>
                         <p className="text-sm sm:text-base text-slate-600">Generate and download attendance reports in DOCX format</p>
                     </div>
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-blue-100 text-center sm:text-left">
-                        <span className="text-slate-700 font-semibold text-sm sm:text-base">
-                            <FileText className="w-4 h-4 sm:w-5 sm:h-5 inline mr-2" />
-                            Total Records: {totalRecords}
-                        </span>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setShowUploadModal(true)}
+                            className="bg-gradient-to-r from-indigo-500 to-indigo-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-indigo-100 hover:from-indigo-600 hover:to-indigo-700 transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg"
+                        >
+                            <FileUp className="w-4 h-4 sm:w-5 sm:h-5" />
+                            <span className="font-semibold text-sm sm:text-base">Upload Template</span>
+                        </button>
+                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-blue-100 text-center sm:text-left">
+                            <span className="text-slate-700 font-semibold text-sm sm:text-base">
+                                <FileText className="w-4 h-4 sm:w-5 sm:h-5 inline mr-2" />
+                                Total Records: {totalRecords}
+                            </span>
+                        </div>
                     </div>
                 </div>
+                {hasTemplate && templateFileName && (
+                    <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                            <FileText className="w-5 h-5 text-green-600" />
+                            <span className="text-sm font-medium text-green-800">
+                                Template: <span className="font-semibold">{templateFileName}</span>
+                            </span>
+                        </div>
+                        <button
+                            onClick={handleDeleteTemplate}
+                            className="text-red-600 hover:text-red-700 text-sm font-medium"
+                        >
+                            Remove
+                        </button>
+                    </div>
+                )}
             </div>
 
             {/* Category Filter */}
@@ -571,10 +685,10 @@ export default function ReportsPage() {
                                     onClick={() => isStudent ? generateStudentDOCX(studentRecord!) : generateFacultyDOCX(facultyRecord!)}
                                     disabled={generating || !record.is_submitted}
                                     className={`w-full px-4 py-3 rounded-xl transition-all flex items-center justify-center space-x-2 font-medium shadow-md ${!record.is_submitted
-                                            ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                                            : generating
-                                                ? 'bg-blue-400 text-white cursor-not-allowed'
-                                                : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 hover:shadow-lg'
+                                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                                        : generating
+                                            ? 'bg-blue-400 text-white cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 hover:shadow-lg'
                                         }`}
                                     title={!record.is_submitted ? 'Please submit attendance before generating report' : 'Generate attendance report'}
                                 >
@@ -598,6 +712,82 @@ export default function ReportsPage() {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {/* Upload Template Modal */}
+            {showUploadModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-slate-800 flex items-center space-x-2">
+                                <FileUp className="w-6 h-6 text-indigo-600" />
+                                <span>Upload Report Template</span>
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    setShowUploadModal(false);
+                                    if (fileInputRef.current) {
+                                        fileInputRef.current.value = '';
+                                    }
+                                }}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="text-sm text-slate-600 mb-4">
+                                Upload a DOCX template file for report generation. The template should include placeholders like {'{subject}'}, {'{course_code}'}, {'{students}'}, etc.
+                            </p>
+
+                            <div className="block mb-2">
+                                <span className="text-sm font-medium text-slate-700">Select Template File (.docx)</span>
+                                <label className="mt-2 block">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept=".docx"
+                                        onChange={handleTemplateUpload}
+                                        className="hidden"
+                                        disabled={uploadingTemplate}
+                                    />
+                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors cursor-pointer">
+                                        <div className="flex flex-col items-center">
+                                            <Upload className="w-12 h-12 text-slate-400 mb-2" />
+                                            <span className="text-sm text-slate-600">
+                                                {uploadingTemplate ? 'Uploading...' : 'Click to select or drag and drop'}
+                                            </span>
+                                            <span className="text-xs text-slate-500 mt-1">Maximum file size: 10MB</span>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        {uploadingTemplate && (
+                            <div className="flex items-center justify-center space-x-2 text-indigo-600">
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                <span className="text-sm font-medium">Uploading template...</span>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end space-x-3 mt-6">
+                            <button
+                                onClick={() => {
+                                    setShowUploadModal(false);
+                                    if (fileInputRef.current) {
+                                        fileInputRef.current.value = '';
+                                    }
+                                }}
+                                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                                disabled={uploadingTemplate}
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

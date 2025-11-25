@@ -152,6 +152,13 @@ export interface Admin {
     updatedAt?: Timestamp;
 }
 
+export interface AppSettings {
+    id?: string;
+    late_minutes: number; // Minutes after schedule start time to mark as late (default: 30)
+    created_at?: Timestamp;
+    updated_at?: Timestamp;
+}
+
 // Admin operations
 export const adminService = {
     async createAdmin(admin: Omit<Admin, 'id' | 'createdAt' | 'updatedAt'>): Promise<void> {
@@ -417,6 +424,16 @@ export const userService = {
         })) as User[];
     },
 
+    async getUserById(id: string): Promise<User | null> {
+        const querySnapshot = await getDocs(
+            query(collection(db, 'users'), where('__name__', '==', id))
+        );
+        if (querySnapshot.empty) return null;
+
+        const doc = querySnapshot.docs[0];
+        return { id: doc.id, ...doc.data() } as User;
+    },
+
     async updateUser(id: string, data: Partial<User>): Promise<void> {
         const userRef = doc(db, 'users', id);
         await updateDoc(userRef, {
@@ -560,5 +577,62 @@ export const dashboardService = {
             totalSubjects: subjects.size,
             totalHolidays: holidays.size
         };
+    }
+};
+
+// Settings operations
+export const settingsService = {
+    async getSettings(): Promise<AppSettings | null> {
+        try {
+            const querySnapshot = await getDocs(collection(db, 'settings'));
+
+            if (querySnapshot.empty) {
+                // Return default settings if none exist
+                return {
+                    late_minutes: 30,
+                };
+            }
+
+            // Get the first document (there should only be one settings document)
+            const settingsDoc = querySnapshot.docs[0];
+            const data = settingsDoc.data();
+            return {
+                id: settingsDoc.id,
+                late_minutes: data.late_minutes ?? 30,
+                created_at: data.created_at,
+                updated_at: data.updated_at,
+            } as AppSettings;
+        } catch (error) {
+            console.error('Error fetching settings:', error);
+            // Return default settings on error
+            return {
+                late_minutes: 30,
+            };
+        }
+    },
+
+    async updateSettings(settings: Partial<AppSettings>): Promise<void> {
+        try {
+            const querySnapshot = await getDocs(collection(db, 'settings'));
+
+            if (querySnapshot.empty) {
+                // Create new settings document
+                await addDoc(collection(db, 'settings'), {
+                    late_minutes: settings.late_minutes ?? 30,
+                    created_at: serverTimestamp(),
+                    updated_at: serverTimestamp(),
+                });
+            } else {
+                // Update existing settings
+                const docRef = doc(db, 'settings', querySnapshot.docs[0].id);
+                await updateDoc(docRef, {
+                    ...settings,
+                    updated_at: serverTimestamp(),
+                });
+            }
+        } catch (error) {
+            console.error('Error updating settings:', error);
+            throw error;
+        }
     }
 };

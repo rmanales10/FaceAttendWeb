@@ -9,7 +9,9 @@ import {
     Student,
     classAttendanceService,
     ClassAttendance,
-    AttendanceRecord as FirestoreAttendanceRecord
+    AttendanceRecord as FirestoreAttendanceRecord,
+    settingsService,
+    AppSettings
 } from '@/lib/firestore';
 import * as faceapi from 'face-api.js';
 import {
@@ -23,7 +25,8 @@ import {
     Loader2,
     Save,
     Copy,
-    Link as LinkIcon
+    Link as LinkIcon,
+    Clock
 } from 'lucide-react';
 import { useToast } from '@/components/Toast/Toast';
 
@@ -54,6 +57,7 @@ function FaceRecognitionContent() {
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
     const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
     const [isLandscape, setIsLandscape] = useState(false);
+    const [appSettings, setAppSettings] = useState<AppSettings | null>(null);
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const detectionInterval = useRef<NodeJS.Timeout | null>(null);
@@ -73,6 +77,17 @@ function FaceRecognitionContent() {
             showToast('Failed to load face recognition models. Please ensure models are in /public/models folder.', 'error', 7000);
         }
     }, [showToast]);
+
+    const loadSettings = async () => {
+        try {
+            const settings = await settingsService.getSettings();
+            setAppSettings(settings);
+        } catch (error) {
+            console.error('Error loading settings:', error);
+            // Use default settings
+            setAppSettings({ late_minutes: 30 });
+        }
+    };
 
     const fetchSchedules = useCallback(async () => {
         try {
@@ -113,6 +128,7 @@ function FaceRecognitionContent() {
         const init = async () => {
             await loadModels();
             await fetchSchedules();
+            await loadSettings();
         };
         init();
 
@@ -330,20 +346,29 @@ function FaceRecognitionContent() {
                 const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
 
                 if (ctx) {
+                    // Adjust coordinates if using front camera (mirrored)
+                    let drawX = box.x;
+                    let drawY = box.y;
+
+                    if (facingMode === 'user') {
+                        // When mirrored, flip the x coordinate
+                        drawX = canvas.width - box.x - box.width;
+                    }
+
                     const boxColor = bestMatch.label !== 'unknown' ? '#10b981' : '#f59e0b';
                     ctx.strokeStyle = boxColor;
                     ctx.lineWidth = 3;
-                    ctx.strokeRect(box.x, box.y, box.width, box.height);
+                    ctx.strokeRect(drawX, drawY, box.width, box.height);
 
                     ctx.fillStyle = boxColor;
-                    ctx.fillRect(box.x, box.y - 30, box.width, 30);
+                    ctx.fillRect(drawX, drawY - 30, box.width, 30);
 
                     ctx.fillStyle = '#ffffff';
                     ctx.font = 'bold 16px Arial';
                     const label = bestMatch.label !== 'unknown'
                         ? `${bestMatch.label} (${(1 - bestMatch.distance).toFixed(2)})`
                         : 'Unknown';
-                    ctx.fillText(label, box.x + 5, box.y - 10);
+                    ctx.fillText(label, drawX + 5, drawY - 10);
                 }
 
                 // Mark attendance only if confidence is 60% or above
@@ -401,12 +426,63 @@ function FaceRecognitionContent() {
         return `${displayHour}:${minuteStr} ${period}`;
     };
 
+    const parseScheduleTime = (scheduleString: string): Date | null => {
+        try {
+            // Parse schedule like "Wed 1:31 AM - 1:30 AM" or "Mon 2:00 PM - 3:30 PM"
+            // Extract the start time (first time in the string)
+            const timeMatch = scheduleString.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+            if (!timeMatch) return null;
+
+            const hour = parseInt(timeMatch[1]);
+            const minute = parseInt(timeMatch[2]);
+            const period = timeMatch[3].toUpperCase();
+
+            // Convert to 24-hour format
+            let hour24 = hour;
+            if (period === 'PM' && hour !== 12) {
+                hour24 = hour + 12;
+            } else if (period === 'AM' && hour === 12) {
+                hour24 = 0;
+            }
+
+            // Get today's date
+            const today = new Date();
+            const scheduleTime = new Date();
+            scheduleTime.setHours(hour24, minute, 0, 0);
+
+            return scheduleTime;
+        } catch (error) {
+            console.error('Error parsing schedule time:', error);
+            return null;
+        }
+    };
+
+    const isLate = (currentTime: Date, scheduleStartTime: Date | null): boolean => {
+        if (!scheduleStartTime || !appSettings) return false;
+
+        const lateMinutes = appSettings.late_minutes || 30;
+        const lateThreshold = new Date(scheduleStartTime);
+        lateThreshold.setMinutes(lateThreshold.getMinutes() + lateMinutes);
+
+        return currentTime > lateThreshold;
+    };
+
     const markAttendance = (studentName: string, status: 'present' | 'absent' | 'late', confidence?: number) => {
         const now = new Date();
+
+        // Determine if student is late based on schedule and settings
+        let finalStatus: 'present' | 'absent' | 'late' = status;
+        if (status === 'present' && selectedSchedule) {
+            const scheduleStartTime = parseScheduleTime(selectedSchedule.schedule || '');
+            if (isLate(now, scheduleStartTime)) {
+                finalStatus = 'late';
+            }
+        }
+
         setAttendanceRecords(prev =>
             prev.map(record =>
                 record.student_name === studentName && record.status === 'absent'
-                    ? { ...record, status, timestamp: now, confidence }
+                    ? { ...record, status: finalStatus, timestamp: now, confidence }
                     : record
             )
         );
@@ -434,7 +510,7 @@ function FaceRecognitionContent() {
                 student_name: record.student_name,
                 status: record.status,
                 timestamp: record.timestamp,
-                time_in: record.status === 'present' ? formatTime(record.timestamp) : '',
+                time_in: (record.status === 'present' || record.status === 'late') ? formatTime(record.timestamp) : '',
                 attendance_type: 'face' as const,
                 confidence: record.confidence || 0
             }));
@@ -490,12 +566,12 @@ function FaceRecognitionContent() {
             const docId = await classAttendanceService.addClassAttendance(classAttendanceData);
 
             showToast(
-                `✅ Attendance saved! Present: ${stats.present || 0}/${stats.total || 0} students`,
+                `✅ Attendance saved! Present: ${stats.present || 0}, Late: ${stats.late || 0}, Absent: ${stats.absent || 0}/${stats.total || 0} students`,
                 'success',
                 5000
             );
             console.log('Attendance saved with ID:', docId);
-            console.log(`Date: ${attendanceDate}, Subject: ${selectedSchedule.subject_name}, Present: ${stats.present || 0}/${stats.total || 0}`);
+            console.log(`Date: ${attendanceDate}, Subject: ${selectedSchedule.subject_name}, Present: ${stats.present || 0}, Late: ${stats.late || 0}, Absent: ${stats.absent || 0}/${stats.total || 0}`);
 
             // Close the webview/page - this will navigate back to Flutter
             window.close();
@@ -605,7 +681,7 @@ function FaceRecognitionContent() {
                                 autoPlay
                                 playsInline
                                 muted
-                                className="w-full h-full"
+                                className={`w-full h-full ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
                                 style={{ display: streamActive ? 'block' : 'none' }}
                             />
                             <canvas
@@ -701,6 +777,13 @@ function FaceRecognitionContent() {
                                 </div>
                                 <span className="font-bold text-red-600 text-2xl">{stats.absent}</span>
                             </div>
+                            <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200">
+                                <div className="flex items-center space-x-2">
+                                    <Clock className="w-5 h-5 text-amber-600" />
+                                    <span className="font-semibold text-slate-700 text-sm">Late</span>
+                                </div>
+                                <span className="font-bold text-amber-600 text-2xl">{stats.late}</span>
+                            </div>
                             <div className="flex items-center justify-between p-3 rounded-xl bg-orange-50 border border-orange-200">
                                 <div className="flex items-center space-x-2">
                                     <Users className="w-5 h-5 text-slate-600" />
@@ -709,10 +792,14 @@ function FaceRecognitionContent() {
                                 <span className="font-bold text-slate-800 text-2xl">{stats.total}</span>
                             </div>
                         </div>
-                        {selectedSchedule && stats.present > 0 && (
+                        {selectedSchedule && (
                             <button
                                 onClick={saveAttendance}
-                                className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-xl hover:from-indigo-600 hover:to-indigo-700 shadow-md font-semibold flex items-center justify-center space-x-2"
+                                disabled={stats.total === 0}
+                                className={`w-full mt-4 px-6 py-3 rounded-xl shadow-md font-semibold flex items-center justify-center space-x-2 transition-all ${stats.total === 0
+                                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white hover:from-indigo-600 hover:to-indigo-700'
+                                    }`}
                             >
                                 <Save className="w-5 h-5" />
                                 <span>Save Attendance</span>
@@ -736,7 +823,7 @@ function FaceRecognitionContent() {
                                         className={`p-3 rounded-xl border-2 ${record.status === 'present'
                                             ? 'border-green-200 bg-green-50'
                                             : record.status === 'late'
-                                                ? 'border-orange-200 bg-orange-50'
+                                                ? 'border-amber-200 bg-amber-50'
                                                 : 'border-slate-200 bg-slate-50'
                                             }`}
                                     >
@@ -752,6 +839,7 @@ function FaceRecognitionContent() {
                                                 )}
                                             </div>
                                             {record.status === 'present' && <CheckCircle className="w-5 h-5 text-green-600" />}
+                                            {record.status === 'late' && <Clock className="w-5 h-5 text-amber-600" />}
                                             {record.status === 'absent' && <XCircle className="w-5 h-5 text-slate-400" />}
                                         </div>
                                     </div>

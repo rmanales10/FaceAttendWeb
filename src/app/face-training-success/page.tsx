@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle, GraduationCap, UserCircle } from 'lucide-react';
+import { CheckCircle, GraduationCap, UserCircle, Loader2 } from 'lucide-react';
 
-export default function FaceTrainingSuccessPage() {
+function FaceTrainingSuccessContent() {
     const searchParams = useSearchParams();
     const personType = searchParams?.get('type') || 'student';
     const personName = searchParams?.get('name') || 'Student';
@@ -95,7 +95,7 @@ export default function FaceTrainingSuccessPage() {
 
                         {/* Info Box */}
                         <div className="bg-blue-50 border border-blue-200 rounded-lg sm:rounded-xl p-3 sm:p-4 mb-3 sm:mb-4">
-                            <h4 className="font-semibold text-blue-900 mb-2 text-xs sm:text-sm">What's Next?</h4>
+                            <h4 className="font-semibold text-blue-900 mb-2 text-xs sm:text-sm">What&apos;s Next?</h4>
                             <div className="space-y-1.5">
                                 <div className="flex items-start space-x-2">
                                     <span className="text-blue-500 font-bold text-sm">•</span>
@@ -122,6 +122,23 @@ export default function FaceTrainingSuccessPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function FaceTrainingSuccessPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
+                    <div className="text-center">
+                        <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mx-auto mb-4" />
+                        <p className="text-slate-600 font-medium text-lg">Loading...</p>
+                    </div>
+                </div>
+            }
+        >
+            <FaceTrainingSuccessContent />
+        </Suspense>
     );
 }
 

@@ -14,11 +14,7 @@ export default function SettingsPage() {
         late_minutes: 30,
     });
 
-    useEffect(() => {
-        loadSettings();
-    }, []);
-
-    const loadSettings = async () => {
+    const loadSettings = React.useCallback(async () => {
         try {
             setLoading(true);
             const currentSettings = await settingsService.getSettings();
@@ -31,7 +27,11 @@ export default function SettingsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [showError]);
+
+    useEffect(() => {
+        loadSettings();
+    }, [loadSettings]);
 
     const handleSave = async () => {
         try {
@@ -145,8 +145,8 @@ export default function SettingsPage() {
                         onClick={handleSave}
                         disabled={saving}
                         className={`px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl transition-all font-semibold text-sm sm:text-base flex items-center justify-center space-x-2 sm:space-x-3 shadow-lg hover:shadow-xl ${saving
-                                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700'
                             }`}
                     >
                         {saving ? (

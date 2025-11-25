@@ -453,7 +453,7 @@ export default function FaceTrainingPage() {
         try {
             await navigator.clipboard.writeText(link);
             success('Training link copied to clipboard!');
-        } catch (err) {
+        } catch {
             showError('Failed to copy link. Please copy manually.');
         }
     };

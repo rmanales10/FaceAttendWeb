@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { studentService, Student, userService, User } from '@/lib/firestore';
 import * as faceapi from 'face-api.js';
 import {
@@ -19,7 +19,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 
 type PersonType = 'student' | 'teacher';
 
-export default function FaceTrainingSelfPage() {
+function FaceTrainingSelfContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const personId = searchParams?.get('id');
@@ -649,5 +649,22 @@ export default function FaceTrainingSelfPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function FaceTrainingSelfPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex items-center justify-center h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+                    <div className="text-center">
+                        <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mx-auto mb-4" />
+                        <p className="text-slate-600 font-medium text-lg">Loading...</p>
+                    </div>
+                </div>
+            }
+        >
+            <FaceTrainingSelfContent />
+        </Suspense>
     );
 }

@@ -348,7 +348,7 @@ function FaceRecognitionContent() {
                 if (ctx) {
                     // Adjust coordinates if using front camera (mirrored)
                     let drawX = box.x;
-                    let drawY = box.y;
+                    const drawY = box.y;
 
                     if (facingMode === 'user') {
                         // When mirrored, flip the x coordinate
@@ -445,8 +445,7 @@ function FaceRecognitionContent() {
                 hour24 = 0;
             }
 
-            // Get today's date
-            const today = new Date();
+            // Get schedule time
             const scheduleTime = new Date();
             scheduleTime.setHours(hour24, minute, 0, 0);
 
@@ -730,7 +729,7 @@ function FaceRecognitionContent() {
                                         try {
                                             await navigator.clipboard.writeText(url);
                                             showToast('Link copied to clipboard!', 'success', 3000);
-                                        } catch (err) {
+                                        } catch {
                                             // Fallback for older browsers
                                             const textArea = document.createElement('textarea');
                                             textArea.value = url;
@@ -741,7 +740,7 @@ function FaceRecognitionContent() {
                                             try {
                                                 document.execCommand('copy');
                                                 showToast('Link copied to clipboard!', 'success', 3000);
-                                            } catch (fallbackErr) {
+                                            } catch {
                                                 showToast('Failed to copy link', 'error', 3000);
                                             }
                                             document.body.removeChild(textArea);

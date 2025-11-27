@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { studentService, Student, subjectService, Subject } from '@/lib/firestore';
+import { studentService, Student, subjectService, Subject, classScheduleService, ClassSchedule, userService, Teacher, roomService, Room } from '@/lib/firestore';
+import { parseClassListCSV, ParsedCSVData } from '@/lib/csvParser';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import ConfirmModal from '@/components/ConfirmModal';
 import { useConfirmModal } from '@/hooks/useConfirmModal';
@@ -16,7 +17,12 @@ import {
     BookOpen,
     X,
     Save,
-    Check
+    Check,
+    Upload,
+    FileText,
+    Loader2,
+    AlertCircle,
+    CheckCircle
 } from 'lucide-react';
 
 export default function StudentsPage() {
@@ -46,6 +52,13 @@ export default function StudentsPage() {
         block: '',
         selectedSubjects: [] as string[]
     });
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [parsedData, setParsedData] = useState<ParsedCSVData | null>(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importProgress, setImportProgress] = useState({ current: 0, total: 0, message: '' });
+    const [importResult, setImportResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
 
     useEffect(() => {
         fetchStudents();
@@ -237,6 +250,13 @@ export default function StudentsPage() {
             filtered = filtered.filter(student => student.block === blockFilter);
         }
 
+        // Sort alphabetically by full name
+        filtered = filtered.sort((a, b) => {
+            const nameA = a.full_name.toLowerCase().trim();
+            const nameB = b.full_name.toLowerCase().trim();
+            return nameA.localeCompare(nameB);
+        });
+
         setFilteredStudents(filtered);
     }, [students, searchQuery, departmentFilter, yearLevelFilter, blockFilter]);
 
@@ -300,6 +320,221 @@ export default function StudentsPage() {
         });
     };
 
+    const handleImportCSV = async () => {
+        if (!parsedData) return;
+
+        setIsImporting(true);
+        setImportResult(null);
+        const details: Record<string, number> = {
+            'Students Created': 0,
+            'Students Updated': 0,
+            'Subjects Created': 0,
+            'Rooms Created': 0,
+            'Class Schedules Created': 0,
+            'Errors': 0
+        };
+
+        try {
+            // Get all existing data
+            setImportProgress({ current: 0, total: 5, message: 'Loading existing data...' });
+            const [existingStudents, existingSubjects, existingTeachers, existingSchedules, existingRooms] = await Promise.all([
+                studentService.getAllStudents(),
+                subjectService.getAllSubjects(),
+                userService.getTeachers(),
+                classScheduleService.getAllClassSchedules(),
+                roomService.getAllRooms()
+            ]);
+
+            // Find or create subject
+            setImportProgress({ current: 1, total: 5, message: 'Processing subject...' });
+            let subject = existingSubjects.find(s => s.course_code === parsedData.courseCode);
+            let subjectId = '';
+
+            if (!subject) {
+                // Extract year level from section (e.g., "BSIT4D" -> "4th Year")
+                const yearLevelMatch = parsedData.section.match(/(\d+)/);
+                const yearLevel = yearLevelMatch ? `${yearLevelMatch[1]}th Year` : parsedData.yearLevel || 'Unknown';
+
+                await subjectService.addSubject({
+                    course_code: parsedData.courseCode,
+                    subject_name: parsedData.subjectName,
+                    department: parsedData.department,
+                    year_level: yearLevel
+                });
+                // Refresh subjects to get the new ID
+                const updatedSubjects = await subjectService.getAllSubjects();
+                subject = updatedSubjects.find(s => s.course_code === parsedData.courseCode);
+                details['Subjects Created']++;
+            }
+
+            if (subject) {
+                subjectId = subject.id || '';
+            }
+
+            // Find teacher (if exists)
+            setImportProgress({ current: 2, total: 5, message: 'Finding teacher...' });
+            let teacher = existingTeachers.find(t =>
+                t.full_name.toLowerCase().trim() === parsedData.facultyName.toLowerCase().trim()
+            );
+            const teacherId = teacher?.id || '';
+            const teacherName = teacher?.full_name || parsedData.facultyName;
+
+            // Process students
+            setImportProgress({ current: 3, total: parsedData.students.length + 5, message: 'Processing students...' });
+            let studentCount = 0;
+
+            for (const studentData of parsedData.students) {
+                studentCount++;
+                setImportProgress({
+                    current: 3 + studentCount,
+                    total: parsedData.students.length + 5,
+                    message: `Processing student ${studentCount}/${parsedData.students.length}: ${studentData.fullName}`
+                });
+
+                // Check if student exists (by full name)
+                const existingStudent = existingStudents.find(s =>
+                    s.full_name.toLowerCase().trim() === studentData.fullName.toLowerCase().trim()
+                );
+
+                // Extract year level from section
+                const yearLevelMatch = parsedData.section.match(/(\d+)/);
+                const yearLevel = yearLevelMatch ? `${yearLevelMatch[1]}th Year` : parsedData.yearLevel || 'Unknown';
+
+                // Extract block letter from section (e.g., "BSIT4D" -> "D")
+                const blockMatch = parsedData.section.match(/\d+([A-Z]+)$/);
+                const block = blockMatch ? blockMatch[1] : parsedData.section.replace(/^[A-Z]+\d+/, '');
+
+                if (existingStudent) {
+                    // Merge: Add subject to existing student's subjects array if not already there
+                    const currentSubjects = existingStudent.subject || [];
+                    if (subjectId && !currentSubjects.includes(subjectId)) {
+                        await studentService.updateStudent(existingStudent.id!, {
+                            subject: [...currentSubjects, subjectId],
+                            section_year_block: parsedData.section,
+                            updated_at: new Date() as any
+                        });
+                        details['Students Updated']++;
+                    }
+                } else {
+                    // Create new student
+                    await studentService.addStudent({
+                        full_name: studentData.fullName,
+                        year_level: yearLevel,
+                        department: parsedData.department,
+                        block: block, // Use extracted block letter (e.g., "D")
+                        section_year_block: parsedData.section,
+                        subject: subjectId ? [subjectId] : []
+                    });
+                    details['Students Created']++;
+                }
+            }
+
+            // Create/update rooms from schedules
+            setImportProgress({
+                current: parsedData.students.length + 4,
+                total: parsedData.students.length + parsedData.schedules.length + 6,
+                message: 'Processing rooms...'
+            });
+
+            // Extract unique rooms from schedules
+            const uniqueRooms = new Set<string>();
+            for (const sched of parsedData.schedules) {
+                if (sched.room && sched.room.trim()) {
+                    uniqueRooms.add(sched.room.trim());
+                }
+            }
+
+            // Create rooms that don't exist
+            for (const roomName of uniqueRooms) {
+                const existingRoom = existingRooms.find(r =>
+                    r.room_code.toLowerCase().trim() === roomName.toLowerCase().trim()
+                );
+
+                if (!existingRoom) {
+                    await roomService.addRoom({
+                        room_code: roomName
+                    });
+                    details['Rooms Created']++;
+                }
+            }
+
+            // Create class schedules
+            setImportProgress({
+                current: parsedData.students.length + 5,
+                total: parsedData.students.length + parsedData.schedules.length + 6,
+                message: 'Creating class schedules...'
+            });
+
+            // Track processed schedules to avoid duplicates within the same import
+            const processedScheduleKeys = new Set<string>();
+
+            for (let i = 0; i < parsedData.schedules.length; i++) {
+                const sched = parsedData.schedules[i];
+                setImportProgress({
+                    current: parsedData.students.length + 5 + i + 1,
+                    total: parsedData.students.length + parsedData.schedules.length + 6,
+                    message: `Creating schedule ${i + 1}/${parsedData.schedules.length}`
+                });
+
+                // Format schedule string
+                const scheduleString = `${sched.day} ${sched.time}`;
+
+                // Create a unique key for this schedule to check for duplicates
+                const scheduleKey = `${parsedData.courseCode}|${parsedData.section}|${scheduleString}|${sched.room}`;
+
+                // Skip if we've already processed this schedule in this import
+                if (processedScheduleKeys.has(scheduleKey)) {
+                    continue;
+                }
+                processedScheduleKeys.add(scheduleKey);
+
+                // Check if schedule already exists in database
+                const existingSchedule = existingSchedules.find(s =>
+                    s.course_code === parsedData.courseCode &&
+                    s.course_year === parsedData.section &&
+                    s.schedule === scheduleString &&
+                    s.building_room === sched.room
+                );
+
+                if (!existingSchedule && subjectId) {
+                    const yearLevelMatch = parsedData.section.match(/(\d+)/);
+                    const yearLevel = yearLevelMatch ? `${yearLevelMatch[1]}th Year` : parsedData.yearLevel || 'Unknown';
+
+                    await classScheduleService.addClassSchedule({
+                        teacher_id: teacherId,
+                        teacher_name: teacherName,
+                        subject_id: subjectId,
+                        subject_name: parsedData.subjectName,
+                        course_code: parsedData.courseCode,
+                        department: parsedData.department,
+                        year_level: yearLevel,
+                        course_year: parsedData.section,
+                        schedule: scheduleString,
+                        building_room: sched.room
+                    });
+                    details['Class Schedules Created']++;
+                }
+            }
+
+            setImportResult({
+                success: true,
+                message: 'CSV import completed successfully!',
+                details
+            });
+
+        } catch (error) {
+            console.error('Error importing CSV:', error);
+            details['Errors']++;
+            setImportResult({
+                success: false,
+                message: `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                details
+            });
+        } finally {
+            setIsImporting(false);
+        }
+    };
+
     const getInitials = (name: string) => {
         return name
             .split(' ')
@@ -347,13 +582,22 @@ export default function StudentsPage() {
                                 Total Students: {students.length}
                             </span>
                         </div>
-                        <button
-                            onClick={() => setShowAddModal(true)}
-                            className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
-                        >
-                            <Plus className="w-5 h-5" />
-                            <span className="font-medium text-sm sm:text-base">Add New Student</span>
-                        </button>
+                        <div className="flex gap-2 sm:gap-3">
+                            <button
+                                onClick={() => setShowImportModal(true)}
+                                className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl hover:from-green-600 hover:to-green-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                            >
+                                <Upload className="w-5 h-5" />
+                                <span className="font-medium text-sm sm:text-base">Import CSV</span>
+                            </button>
+                            <button
+                                onClick={() => setShowAddModal(true)}
+                                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                            >
+                                <Plus className="w-5 h-5" />
+                                <span className="font-medium text-sm sm:text-base">Add New Student</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1089,6 +1333,286 @@ export default function StudentsPage() {
                 confirmText={modalState.confirmText}
                 cancelText={modalState.cancelText}
             />
+
+            {/* CSV Import Modal */}
+            {showImportModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center space-x-3">
+                                    <div className="bg-green-100 p-2 rounded-lg">
+                                        <Upload className="w-6 h-6 text-green-600" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800">Import CSV Class List</h2>
+                                        <p className="text-sm text-slate-600">Upload and import students from CSV file</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setShowImportModal(false);
+                                        setCsvFile(null);
+                                        setParsedData(null);
+                                        setImportResult(null);
+                                        setImportProgress({ current: 0, total: 0, message: '' });
+                                        setIsDragging(false);
+                                    }}
+                                    className="text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            {/* File Upload Section */}
+                            {!parsedData && (
+                                <div className="mb-6">
+                                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Select CSV File
+                                    </label>
+                                    <div
+                                        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
+                                            ? 'border-green-500 bg-green-50'
+                                            : 'border-slate-300 hover:border-green-400'
+                                            }`}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setIsDragging(true);
+                                        }}
+                                        onDragEnter={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setIsDragging(true);
+                                        }}
+                                        onDragLeave={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setIsDragging(false);
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setIsDragging(false);
+
+                                            const file = e.dataTransfer.files?.[0];
+                                            if (file) {
+                                                // Check if file is CSV
+                                                if (!file.name.toLowerCase().endsWith('.csv')) {
+                                                    setImportResult({
+                                                        success: false,
+                                                        message: 'Please upload a CSV file only.'
+                                                    });
+                                                    return;
+                                                }
+
+                                                setCsvFile(file);
+                                                const reader = new FileReader();
+                                                reader.onload = (event) => {
+                                                    const text = event.target?.result as string;
+                                                    const parsed = parseClassListCSV(text);
+                                                    if (parsed) {
+                                                        setParsedData(parsed);
+                                                    } else {
+                                                        setImportResult({
+                                                            success: false,
+                                                            message: 'Failed to parse CSV file. Please check the format.'
+                                                        });
+                                                    }
+                                                };
+                                                reader.onerror = () => {
+                                                    setImportResult({
+                                                        success: false,
+                                                        message: 'Error reading file. Please try again.'
+                                                    });
+                                                };
+                                                reader.readAsText(file);
+                                            }
+                                        }}
+                                    >
+                                        <input
+                                            type="file"
+                                            accept=".csv"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) {
+                                                    setCsvFile(file);
+                                                    const reader = new FileReader();
+                                                    reader.onload = (event) => {
+                                                        const text = event.target?.result as string;
+                                                        const parsed = parseClassListCSV(text);
+                                                        if (parsed) {
+                                                            setParsedData(parsed);
+                                                        } else {
+                                                            setImportResult({
+                                                                success: false,
+                                                                message: 'Failed to parse CSV file. Please check the format.'
+                                                            });
+                                                        }
+                                                    };
+                                                    reader.onerror = () => {
+                                                        setImportResult({
+                                                            success: false,
+                                                            message: 'Error reading file. Please try again.'
+                                                        });
+                                                    };
+                                                    reader.readAsText(file);
+                                                }
+                                            }}
+                                            className="hidden"
+                                            id="csv-upload"
+                                        />
+                                        <label
+                                            htmlFor="csv-upload"
+                                            className="cursor-pointer flex flex-col items-center space-y-4"
+                                        >
+                                            <FileText className={`w-12 h-12 ${isDragging ? 'text-green-500' : 'text-slate-400'}`} />
+                                            <div>
+                                                <span className="text-green-600 font-medium">Click to upload</span>
+                                                <span className="text-slate-600"> or drag and drop</span>
+                                            </div>
+                                            <p className="text-xs text-slate-500">CSV files only</p>
+                                        </label>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Preview Section */}
+                            {parsedData && !isImporting && !importResult && (
+                                <div className="mb-6 space-y-4">
+                                    <h3 className="text-lg font-semibold text-slate-800">Preview</h3>
+                                    <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <span className="text-sm font-medium text-slate-600">Section:</span>
+                                                <p className="text-slate-800 font-semibold">{parsedData.section}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm font-medium text-slate-600">Course Code:</span>
+                                                <p className="text-slate-800 font-semibold">{parsedData.courseCode}</p>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <span className="text-sm font-medium text-slate-600">Subject:</span>
+                                                <p className="text-slate-800 font-semibold">{parsedData.subjectName}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm font-medium text-slate-600">Faculty:</span>
+                                                <p className="text-slate-800 font-semibold">{parsedData.facultyName || 'Not found'}</p>
+                                            </div>
+                                            <div>
+                                                <span className="text-sm font-medium text-slate-600">Students:</span>
+                                                <p className="text-slate-800 font-semibold">{parsedData.students.length}</p>
+                                            </div>
+                                            <div className="col-span-2">
+                                                <span className="text-sm font-medium text-slate-600">Schedules:</span>
+                                                <div className="mt-1 space-y-1">
+                                                    {parsedData.schedules.map((sched, idx) => (
+                                                        <p key={idx} className="text-slate-800 text-sm">
+                                                            {sched.day} {sched.time} ({sched.room})
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex space-x-3">
+                                        <button
+                                            onClick={handleImportCSV}
+                                            className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white px-4 py-3 rounded-lg hover:from-green-600 hover:to-green-700 transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl"
+                                        >
+                                            <Upload className="w-5 h-5" />
+                                            <span>Import Data</span>
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setParsedData(null);
+                                                setCsvFile(null);
+                                                setIsDragging(false);
+                                            }}
+                                            className="px-4 py-3 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-all duration-200"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Import Progress */}
+                            {isImporting && (
+                                <div className="mb-6">
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                        <div className="flex items-center space-x-3 mb-2">
+                                            <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                                            <span className="font-medium text-blue-800">Importing...</span>
+                                        </div>
+                                        {importProgress.total > 0 && (
+                                            <div className="mt-2">
+                                                <div className="w-full bg-blue-200 rounded-full h-2">
+                                                    <div
+                                                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                                                        style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }}
+                                                    ></div>
+                                                </div>
+                                                <p className="text-sm text-blue-700 mt-1">
+                                                    {importProgress.current} / {importProgress.total} - {importProgress.message}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Import Result */}
+                            {importResult && (
+                                <div className={`mb-6 rounded-lg p-4 ${importResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                                    <div className="flex items-start space-x-3">
+                                        {importResult.success ? (
+                                            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                                        ) : (
+                                            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                                        )}
+                                        <div className="flex-1">
+                                            <p className={`font-medium ${importResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                                                {importResult.message}
+                                            </p>
+                                            {importResult.details && (
+                                                <div className="mt-2 text-sm space-y-1">
+                                                    {Object.entries(importResult.details).map(([key, value]) => (
+                                                        <p key={key} className={importResult.success ? 'text-green-700' : 'text-red-700'}>
+                                                            • {key}: {String(value)}
+                                                        </p>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setShowImportModal(false);
+                                            setCsvFile(null);
+                                            setParsedData(null);
+                                            setImportResult(null);
+                                            setImportProgress({ current: 0, total: 0, message: '' });
+                                            setIsDragging(false);
+                                            if (importResult.success) {
+                                                fetchStudents();
+                                                fetchSubjects();
+                                            }
+                                        }}
+                                        className={`mt-4 w-full px-4 py-2 rounded-lg font-medium transition-all duration-200 ${importResult.success
+                                            ? 'bg-green-600 text-white hover:bg-green-700'
+                                            : 'bg-red-600 text-white hover:bg-red-700'
+                                            }`}
+                                    >
+                                        {importResult.success ? 'Close & Refresh' : 'Close'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

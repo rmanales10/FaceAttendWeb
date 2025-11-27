@@ -34,6 +34,9 @@ export default function FaceTrainingPage() {
     const [filteredPersons, setFilteredPersons] = useState<Person[]>([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeFilter, setActiveFilter] = useState<PersonType>('student');
+    const [departmentFilter, setDepartmentFilter] = useState('');
+    const [yearLevelFilter, setYearLevelFilter] = useState('');
+    const [blockFilter, setBlockFilter] = useState('');
     const [loading, setLoading] = useState(true);
     const [modelsLoaded, setModelsLoaded] = useState(false);
     const [showTrainingModal, setShowTrainingModal] = useState(false);
@@ -70,7 +73,7 @@ export default function FaceTrainingPage() {
     useEffect(() => {
         filterPersons();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [students, teachers, searchQuery, activeFilter]);
+    }, [students, teachers, searchQuery, activeFilter, departmentFilter, yearLevelFilter, blockFilter]);
 
     const loadModels = async () => {
         try {
@@ -107,42 +110,88 @@ export default function FaceTrainingPage() {
     };
 
     const filterPersons = useCallback(() => {
-        const allPersons: Person[] = activeFilter === 'student'
+        let allPersons: Person[] = activeFilter === 'student'
             ? students.map(s => ({ ...s, type: 'student' as PersonType }))
             : teachers.map(t => ({ ...t, type: 'teacher' as PersonType }));
 
-        if (!searchQuery.trim()) {
-            setFilteredPersons(allPersons);
-            return;
+        // Apply search filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            allPersons = allPersons.filter(person => {
+                if (person.type === 'student') {
+                    const student = person as Student;
+                    const name = student.full_name?.toLowerCase() || '';
+                    const department = student.department?.toLowerCase() || '';
+                    return (
+                        name.includes(query) ||
+                        student.year_level?.toLowerCase().includes(query) ||
+                        department.includes(query) ||
+                        student.block?.toLowerCase().includes(query)
+                    );
+                } else {
+                    const teacher = person as User;
+                    const name = teacher.fullname?.toLowerCase() || '';
+                    const department = teacher.department?.toLowerCase() || '';
+                    const email = teacher.email?.toLowerCase() || '';
+                    return (
+                        name.includes(query) ||
+                        department.includes(query) ||
+                        email.includes(query)
+                    );
+                }
+            });
         }
 
-        const filtered = allPersons.filter(person => {
-            const query = searchQuery.toLowerCase();
+        // Apply department filter
+        if (departmentFilter && activeFilter === 'student') {
+            allPersons = allPersons.filter(person => {
+                if (person.type === 'student') {
+                    return (person as Student).department === departmentFilter;
+                }
+                return true;
+            });
+        } else if (departmentFilter && activeFilter === 'teacher') {
+            allPersons = allPersons.filter(person => {
+                if (person.type === 'teacher') {
+                    return (person as User).department === departmentFilter;
+                }
+                return true;
+            });
+        }
 
-            if (person.type === 'student') {
-                const student = person as Student;
-                const name = student.full_name?.toLowerCase() || '';
-                const department = student.department?.toLowerCase() || '';
-                return (
-                    name.includes(query) ||
-                    student.year_level?.toLowerCase().includes(query) ||
-                    department.includes(query) ||
-                    student.block?.toLowerCase().includes(query)
-                );
-            } else {
-                const teacher = person as User;
-                const name = teacher.fullname?.toLowerCase() || '';
-                const department = teacher.department?.toLowerCase() || '';
-                const email = teacher.email?.toLowerCase() || '';
-                return (
-                    name.includes(query) ||
-                    department.includes(query) ||
-                    email.includes(query)
-                );
-            }
+        // Apply year level filter (students only)
+        if (yearLevelFilter && activeFilter === 'student') {
+            allPersons = allPersons.filter(person => {
+                if (person.type === 'student') {
+                    return (person as Student).year_level === yearLevelFilter;
+                }
+                return true;
+            });
+        }
+
+        // Apply block filter (students only)
+        if (blockFilter && activeFilter === 'student') {
+            allPersons = allPersons.filter(person => {
+                if (person.type === 'student') {
+                    return (person as Student).block === blockFilter;
+                }
+                return true;
+            });
+        }
+
+        // Sort alphabetically by name
+        allPersons.sort((a, b) => {
+            const nameA = (a.type === 'student'
+                ? (a as Student).full_name
+                : (a as User).fullname || '').toLowerCase().trim();
+            const nameB = (b.type === 'student'
+                ? (b as Student).full_name
+                : (b as User).fullname || '').toLowerCase().trim();
+            return nameA.localeCompare(nameB);
         });
-        setFilteredPersons(filtered);
-    }, [students, teachers, searchQuery, activeFilter]);
+
+        setFilteredPersons(allPersons);
+    }, [students, teachers, searchQuery, activeFilter, departmentFilter, yearLevelFilter, blockFilter]);
 
     const handleTrainPerson = (person: Person) => {
         if (!modelsLoaded) {
@@ -575,17 +624,106 @@ export default function FaceTrainingPage() {
                 </div>
             </div>
 
-            {/* Search */}
+            {/* Search and Filters */}
             <div className="mb-6 sm:mb-8">
-                <div className="relative w-full sm:max-w-lg">
-                    <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 sm:w-5 sm:h-5" />
-                    <input
-                        type="text"
-                        placeholder={`Search ${activeFilter === 'student' ? 'students' : 'teachers'}...`}
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-4 bg-white border border-slate-200 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent shadow-sm hover:shadow-md transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm sm:text-base"
-                    />
+                <div className="bg-gradient-to-r from-white to-slate-50 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 p-3 sm:p-4">
+                    <div className="flex flex-col gap-3">
+                        {/* Search Bar */}
+                        <div className="relative group">
+                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4 group-focus-within:text-purple-500 transition-colors duration-200" />
+                            <input
+                                type="text"
+                                placeholder={`Search ${activeFilter === 'student' ? 'students' : 'teachers'}...`}
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 placeholder-slate-400 text-sm shadow-sm hover:shadow-md"
+                            />
+                        </div>
+
+                        {/* Filter Controls */}
+                        {activeFilter === 'student' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {/* Year Level Filter */}
+                                <div className="relative group">
+                                    <GraduationCap className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-3.5 h-3.5 group-focus-within:text-purple-500 transition-colors duration-200 pointer-events-none z-10" />
+                                    <select
+                                        value={yearLevelFilter}
+                                        onChange={(e) => setYearLevelFilter(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                    >
+                                        <option value="">All Years</option>
+                                        <option value="1st Year">1st Year</option>
+                                        <option value="2nd Year">2nd Year</option>
+                                        <option value="3rd Year">3rd Year</option>
+                                        <option value="4th Year">4th Year</option>
+                                    </select>
+                                </div>
+
+                                {/* Department Filter */}
+                                <div className="relative group">
+                                    <Users className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-3.5 h-3.5 group-focus-within:text-purple-500 transition-colors duration-200 pointer-events-none z-10" />
+                                    <select
+                                        value={departmentFilter}
+                                        onChange={(e) => setDepartmentFilter(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                    >
+                                        <option value="">All Departments</option>
+                                        {Array.from(new Set(students.map(s => s.department).filter(Boolean))).map(dept => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {/* Block Filter */}
+                                <div className="relative group">
+                                    <BookOpen className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-3.5 h-3.5 group-focus-within:text-purple-500 transition-colors duration-200 pointer-events-none z-10" />
+                                    <select
+                                        value={blockFilter}
+                                        onChange={(e) => setBlockFilter(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                    >
+                                        <option value="">All Blocks</option>
+                                        {Array.from(new Set(students.map(s => s.block).filter(Boolean))).sort().map(block => (
+                                            <option key={block} value={block}>{block}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeFilter === 'teacher' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-1 gap-2">
+                                {/* Department Filter for Teachers */}
+                                <div className="relative group">
+                                    <Users className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 w-3.5 h-3.5 group-focus-within:text-purple-500 transition-colors duration-200 pointer-events-none z-10" />
+                                    <select
+                                        value={departmentFilter}
+                                        onChange={(e) => setDepartmentFilter(e.target.value)}
+                                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 text-slate-800 text-sm appearance-none cursor-pointer"
+                                    >
+                                        <option value="">All Departments</option>
+                                        {Array.from(new Set(teachers.map(t => t.department).filter(Boolean))).map(dept => (
+                                            <option key={dept} value={dept}>{dept}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Clear Filters Button */}
+                        {(departmentFilter || yearLevelFilter || blockFilter) && (
+                            <button
+                                onClick={() => {
+                                    setDepartmentFilter('');
+                                    setYearLevelFilter('');
+                                    setBlockFilter('');
+                                }}
+                                className="text-sm text-purple-600 hover:text-purple-700 font-medium self-start"
+                            >
+                                Clear Filters
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 

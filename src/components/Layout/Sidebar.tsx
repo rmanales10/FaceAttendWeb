@@ -17,7 +17,8 @@ import {
     X,
     FileText,
     Building2,
-    Settings
+    Settings,
+    BarChart3
 } from 'lucide-react';
 
 const menuItems = [
@@ -29,6 +30,7 @@ const menuItems = [
     { id: 'class-schedule', label: 'Class Schedule', icon: Calendar, path: '/dashboard/class-schedule' },
     { id: 'face-training', label: 'Face Training', icon: Camera, path: '/dashboard/face-training' },
     // { id: 'face-recognition', label: 'Face Recognition', icon: ScanFace, path: '/dashboard/face-recognition' },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/dashboard/analytics' },
     { id: 'reports', label: 'Reports', icon: FileText, path: '/dashboard/reports' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/dashboard/settings' },
     // { id: 'activity-logs', label: 'Activity Logs', icon: History, path: '/dashboard/activity-logs' },

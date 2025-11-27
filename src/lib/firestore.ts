@@ -120,6 +120,7 @@ export interface ClassAttendance {
     absent_count: number;
     present_count: number;
     late_count: number;
+        excuse_count?: number;
     total_students: number;
     created_at?: Timestamp;
     created_by?: string; // User ID who created the attendance

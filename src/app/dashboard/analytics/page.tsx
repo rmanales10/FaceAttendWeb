@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { classAttendanceService, ClassAttendance } from '@/lib/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { classAttendanceService } from '@/lib/firestore';
 import {
     BarChart,
     Bar,
@@ -59,11 +59,7 @@ export default function AnalyticsPage() {
     const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
     const [dateRange, setDateRange] = useState<'week' | 'month' | 'all'>('month');
 
-    useEffect(() => {
-        fetchAnalytics();
-    }, [dateRange]);
-
-    const fetchAnalytics = async () => {
+    const fetchAnalytics = useCallback(async () => {
         try {
             setLoading(true);
             const allAttendance = await classAttendanceService.getAllClassAttendance();
@@ -91,7 +87,7 @@ export default function AnalyticsPage() {
             const totalPresent = filteredAttendance.reduce((sum, att) => sum + (att.present_count || 0), 0);
             const totalAbsent = filteredAttendance.reduce((sum, att) => sum + (att.absent_count || 0), 0);
             const totalLate = filteredAttendance.reduce((sum, att) => sum + (att.late_count || 0), 0);
-            const totalExcuse = filteredAttendance.reduce((sum, att) => sum + ((att as any).excuse_count || 0), 0);
+            const totalExcuse = filteredAttendance.reduce((sum, att) => sum + (att.excuse_count || 0), 0);
             const totalStudents = totalPresent + totalAbsent + totalLate + totalExcuse;
             const attendanceRate = totalStudents > 0 ? ((totalPresent + totalExcuse) / totalStudents) * 100 : 0;
 
@@ -105,7 +101,7 @@ export default function AnalyticsPage() {
                         present: existing.present + (att.present_count || 0),
                         absent: existing.absent + (att.absent_count || 0),
                         late: existing.late + (att.late_count || 0),
-                        excuse: existing.excuse + ((att as any).excuse_count || 0)
+                        excuse: existing.excuse + (att.excuse_count || 0)
                     });
                 }
             });
@@ -123,7 +119,7 @@ export default function AnalyticsPage() {
                     present: existing.present + (att.present_count || 0),
                     absent: existing.absent + (att.absent_count || 0),
                     late: existing.late + (att.late_count || 0),
-                    excuse: existing.excuse + ((att as any).excuse_count || 0),
+                    excuse: existing.excuse + (att.excuse_count || 0),
                     total: existing.total + (att.total_students || 0)
                 });
             });
@@ -145,7 +141,7 @@ export default function AnalyticsPage() {
                     present: existing.present + (att.present_count || 0),
                     absent: existing.absent + (att.absent_count || 0),
                     late: existing.late + (att.late_count || 0),
-                    excuse: existing.excuse + ((att as any).excuse_count || 0),
+                    excuse: existing.excuse + (att.excuse_count || 0),
                     total: existing.total + (att.total_students || 0)
                 });
             });
@@ -188,7 +184,7 @@ export default function AnalyticsPage() {
                         present: existing.present + (att.present_count || 0),
                         absent: existing.absent + (att.absent_count || 0),
                         late: existing.late + (att.late_count || 0),
-                        excuse: existing.excuse + ((att as any).excuse_count || 0)
+                        excuse: existing.excuse + (att.excuse_count || 0)
                     });
                 }
             });
@@ -215,7 +211,11 @@ export default function AnalyticsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [dateRange]);
+
+    useEffect(() => {
+        fetchAnalytics();
+    }, [fetchAnalytics]);
 
     if (loading) {
         return (
@@ -254,8 +254,8 @@ export default function AnalyticsPage() {
                         <button
                             onClick={() => setDateRange('week')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${dateRange === 'week'
-                                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                                    : 'text-slate-700 hover:bg-slate-50'
+                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                                : 'text-slate-700 hover:bg-slate-50'
                                 }`}
                         >
                             Week
@@ -263,8 +263,8 @@ export default function AnalyticsPage() {
                         <button
                             onClick={() => setDateRange('month')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${dateRange === 'month'
-                                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                                    : 'text-slate-700 hover:bg-slate-50'
+                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                                : 'text-slate-700 hover:bg-slate-50'
                                 }`}
                         >
                             Month
@@ -272,8 +272,8 @@ export default function AnalyticsPage() {
                         <button
                             onClick={() => setDateRange('all')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${dateRange === 'all'
-                                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                                    : 'text-slate-700 hover:bg-slate-50'
+                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
+                                : 'text-slate-700 hover:bg-slate-50'
                                 }`}
                         >
                             All Time
@@ -409,7 +409,7 @@ export default function AnalyticsPage() {
                                 cx="50%"
                                 cy="50%"
                                 labelLine={false}
-                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                                 outerRadius={100}
                                 fill="#8884d8"
                                 dataKey="value"
@@ -440,7 +440,7 @@ export default function AnalyticsPage() {
                                 cx="50%"
                                 cy="50%"
                                 labelLine={false}
-                                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                label={({ name, percent }: { name: string; percent: number }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                                 outerRadius={100}
                                 fill="#8884d8"
                                 dataKey="value"

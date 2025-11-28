@@ -244,7 +244,6 @@ export function parseClassListCSV(csvText: string): ParsedCSVData | null {
             }
 
             // Skip lines that are clearly not student data
-            const lowerLine = line.toLowerCase();
             if (
                 line.includes('TOTAL NUMBER') ||
                 line.includes('Page') ||

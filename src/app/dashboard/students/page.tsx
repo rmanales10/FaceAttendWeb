@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { studentService, Student, subjectService, Subject, classScheduleService, ClassSchedule, userService, Teacher, roomService, Room } from '@/lib/firestore';
+import { studentService, Student, subjectService, Subject, classScheduleService, userService, roomService } from '@/lib/firestore';
 import { parseClassListCSV, ParsedCSVData } from '@/lib/csvParser';
 import DeleteConfirmationModal from '@/components/Modals/DeleteConfirmationModal';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -53,11 +53,10 @@ export default function StudentsPage() {
         selectedSubjects: [] as string[]
     });
     const [showImportModal, setShowImportModal] = useState(false);
-    const [csvFile, setCsvFile] = useState<File | null>(null);
     const [parsedData, setParsedData] = useState<ParsedCSVData | null>(null);
     const [isImporting, setIsImporting] = useState(false);
     const [importProgress, setImportProgress] = useState({ current: 0, total: 0, message: '' });
-    const [importResult, setImportResult] = useState<{ success: boolean; message: string; details?: any } | null>(null);
+    const [importResult, setImportResult] = useState<{ success: boolean; message: string; details?: Record<string, number> } | null>(null);
     const [isDragging, setIsDragging] = useState(false);
 
     useEffect(() => {
@@ -373,7 +372,7 @@ export default function StudentsPage() {
 
             // Find teacher (if exists)
             setImportProgress({ current: 2, total: 5, message: 'Finding teacher...' });
-            let teacher = existingTeachers.find(t =>
+            const teacher = existingTeachers.find(t =>
                 t.full_name.toLowerCase().trim() === parsedData.facultyName.toLowerCase().trim()
             );
             const teacherId = teacher?.id || '';
@@ -410,8 +409,7 @@ export default function StudentsPage() {
                     if (subjectId && !currentSubjects.includes(subjectId)) {
                         await studentService.updateStudent(existingStudent.id!, {
                             subject: [...currentSubjects, subjectId],
-                            section_year_block: parsedData.section,
-                            updated_at: new Date() as any
+                            section_year_block: parsedData.section
                         });
                         details['Students Updated']++;
                     }
@@ -1353,7 +1351,6 @@ export default function StudentsPage() {
                                 <button
                                     onClick={() => {
                                         setShowImportModal(false);
-                                        setCsvFile(null);
                                         setParsedData(null);
                                         setImportResult(null);
                                         setImportProgress({ current: 0, total: 0, message: '' });
@@ -1407,7 +1404,6 @@ export default function StudentsPage() {
                                                     return;
                                                 }
 
-                                                setCsvFile(file);
                                                 const reader = new FileReader();
                                                 reader.onload = (event) => {
                                                     const text = event.target?.result as string;
@@ -1437,7 +1433,6 @@ export default function StudentsPage() {
                                             onChange={(e) => {
                                                 const file = e.target.files?.[0];
                                                 if (file) {
-                                                    setCsvFile(file);
                                                     const reader = new FileReader();
                                                     reader.onload = (event) => {
                                                         const text = event.target?.result as string;
@@ -1527,7 +1522,6 @@ export default function StudentsPage() {
                                         <button
                                             onClick={() => {
                                                 setParsedData(null);
-                                                setCsvFile(null);
                                                 setIsDragging(false);
                                             }}
                                             className="px-4 py-3 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-all duration-200"
@@ -1590,7 +1584,6 @@ export default function StudentsPage() {
                                     <button
                                         onClick={() => {
                                             setShowImportModal(false);
-                                            setCsvFile(null);
                                             setParsedData(null);
                                             setImportResult(null);
                                             setImportProgress({ current: 0, total: 0, message: '' });

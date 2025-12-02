@@ -103,5 +103,5 @@ For each student in the loop:
 - `{no}` - Student number (1, 2, 3...)
 - `{name}` - Student name
 - `{course_year}` - Student's course and year
-- `{attendance}` - ✓ for present, X for absent
+- `{attendance}` - ✓ for present, L for late, X for absent, E for excuse
 

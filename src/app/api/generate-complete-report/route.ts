@@ -232,11 +232,18 @@ export async function POST(request: NextRequest) {
                 const attendanceByDateIndex: { [key: string]: string } = {};
 
                 // Initialize all attendance columns (up to 10) with empty string
+                // Only initialize for dates that exist
                 for (let i = 1; i <= dates.length; i++) {
                     const dateKey = `date${i}`;
                     const attendanceKey = `attendance${i}`;
                     // Get attendance symbol from student.attendance using dateKey
-                    attendanceByDateIndex[attendanceKey] = student.attendance[dateKey] || '';
+                    const attendanceSymbol = student.attendance[dateKey];
+                    attendanceByDateIndex[attendanceKey] = attendanceSymbol || '';
+                }
+
+                // Initialize remaining attendance columns (if dates.length < 10) with empty strings
+                for (let i = dates.length + 1; i <= 10; i++) {
+                    attendanceByDateIndex[`attendance${i}`] = '';
                 }
 
                 return {
@@ -277,7 +284,12 @@ export async function POST(request: NextRequest) {
         // Initialize all date columns, filling with empty string if no date exists
         for (let i = 1; i <= 10; i++) {
             const dateIndex = i - 1;
-            templateData[`date${i}`] = dates[dateIndex] || '';
+            if (dates[dateIndex]) {
+                templateData[`date${i}`] = dates[dateIndex];
+            } else {
+                // Set to empty string to avoid "undefined" in template
+                templateData[`date${i}`] = '';
+            }
         }
 
         // Set the template data

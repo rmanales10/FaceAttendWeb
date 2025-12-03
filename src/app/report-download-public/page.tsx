@@ -51,10 +51,19 @@ function ReportDownloadContent() {
     const [attendanceData, setAttendanceData] = useState<ClassAttendance | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [isCompleteReport, setIsCompleteReport] = useState(false);
 
     useEffect(() => {
         if (attendanceId) {
-            fetchAttendanceData();
+            // Check if this is a complete report (multiple IDs comma-separated)
+            const attendanceIds = attendanceId.split(',').map(id => id.trim()).filter(id => id.length > 0);
+            if (attendanceIds.length > 1) {
+                setIsCompleteReport(true);
+                // For complete reports, we'll generate directly without fetching
+                setLoading(false);
+            } else {
+                fetchAttendanceData();
+            }
         } else {
             setError('No attendance ID provided');
             setLoading(false);
@@ -111,6 +120,56 @@ function ReportDownloadContent() {
             return 'N/A';
         } catch {
             return 'N/A';
+        }
+    };
+
+    const generateCompleteReport = async () => {
+        if (!attendanceId) return;
+
+        setDownloading(true);
+        try {
+            // Parse attendance IDs
+            const attendanceIds = attendanceId.split(',').map(id => id.trim()).filter(id => id.length > 0);
+
+            // Call the complete report API
+            const response = await fetch('/api/generate-complete-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ attendanceIds }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Failed to generate report');
+            }
+
+            // Get the blob from response
+            const blob = await response.blob();
+
+            // Generate filename
+            const dateStr = new Date().toISOString().split('T')[0];
+            const fileName = `Complete_Attendance_Report_${dateStr}.docx`;
+
+            // Download the file
+            saveAs(blob, fileName);
+
+            setSuccess(true);
+
+            // Notify Flutter app and close after a short delay
+            setTimeout(() => {
+                if (window.opener) {
+                    window.close();
+                } else {
+                    window.location.href = 'flutter://download-complete';
+                }
+            }, 1500);
+        } catch (err) {
+            console.error('Error generating complete report:', err);
+            setError(err instanceof Error ? err.message : 'Failed to generate report. Please try again.');
+        } finally {
+            setDownloading(false);
         }
     };
 
@@ -255,12 +314,18 @@ function ReportDownloadContent() {
                     <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
                         <FileText className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-slate-800 mb-2">Download Attendance Report</h1>
-                    <p className="text-slate-600">Click the button below to download the DOCX file</p>
+                    <h1 className="text-3xl font-bold text-slate-800 mb-2">
+                        {isCompleteReport ? 'Download Complete Attendance Report' : 'Download Attendance Report'}
+                    </h1>
+                    <p className="text-slate-600">
+                        {isCompleteReport
+                            ? 'This report contains multiple attendance dates. Click below to download.'
+                            : 'Click the button below to download the DOCX file'}
+                    </p>
                 </div>
 
                 {/* Attendance Details */}
-                {attendanceData && (
+                {!isCompleteReport && attendanceData && (
                     <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 mb-6">
                         <h3 className="font-bold text-lg text-slate-800 mb-4">Report Details</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -306,9 +371,18 @@ function ReportDownloadContent() {
                     </div>
                 )}
 
+                {isCompleteReport && (
+                    <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-6 mb-6">
+                        <h3 className="font-bold text-lg text-slate-800 mb-4">Complete Report</h3>
+                        <p className="text-slate-600">
+                            This report includes multiple attendance dates combined into a single document.
+                        </p>
+                    </div>
+                )}
+
                 {/* Download Button */}
                 <button
-                    onClick={generateDOCX}
+                    onClick={isCompleteReport ? generateCompleteReport : generateDOCX}
                     disabled={downloading}
                     className={`w-full py-4 rounded-xl font-bold text-white transition-all duration-200 flex items-center justify-center space-x-2 ${downloading
                         ? 'bg-slate-400 cursor-not-allowed'

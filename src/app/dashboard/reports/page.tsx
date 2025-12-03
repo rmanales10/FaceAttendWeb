@@ -8,7 +8,12 @@ import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, Gra
 import { saveAs } from 'file-saver';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
-import { templateStorage } from '@/lib/templateStorage';
+interface TemplateInfo {
+    id: string;
+    name: string;
+    uploadedAt: number;
+    size: number;
+}
 
 interface AttendanceRecord {
     student_id: string;
@@ -90,6 +95,10 @@ export default function ReportsPage() {
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [hasTemplate, setHasTemplate] = useState(false);
     const [templateFileName, setTemplateFileName] = useState<string | null>(null);
+    const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+    const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -150,22 +159,43 @@ export default function ReportsPage() {
 
     const checkTemplateExists = async () => {
         try {
-            const exists = await templateStorage.hasTemplate();
-            setHasTemplate(exists);
-            if (exists) {
-                // Try to get template info from localStorage
-                const savedFileName = localStorage.getItem('template_file_name');
-                setTemplateFileName(savedFileName);
+            const response = await fetch('/api/templates');
+            if (!response.ok) {
+                throw new Error('Failed to fetch templates');
+            }
+            const data = await response.json();
+            const templateList = data.templates || [];
+            const selectedId = data.selectedTemplateId || null;
+
+            setTemplates(templateList);
+            setHasTemplate(templateList.length > 0);
+            setSelectedTemplateId(selectedId);
+
+            // Set template file name for display
+            if (selectedId) {
+                const selectedTemplate = templateList.find((t: TemplateInfo) => t.id === selectedId);
+                if (selectedTemplate) {
+                    setTemplateFileName(selectedTemplate.name);
+                } else if (templateList.length > 0) {
+                    // If selected template not found, use first template
+                    setTemplateFileName(templateList[0].name);
+                    await selectTemplate(templateList[0].id);
+                    setSelectedTemplateId(templateList[0].id);
+                }
+            } else if (templateList.length > 0) {
+                // No template selected, use first one
+                setTemplateFileName(templateList[0].name);
+                await selectTemplate(templateList[0].id);
+                setSelectedTemplateId(templateList[0].id);
+            } else {
+                setTemplateFileName(null);
             }
         } catch (error) {
             console.error('Error checking template:', error);
         }
     };
 
-    const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
+    const validateAndUploadFile = async (file: File) => {
         // Validate file type
         if (!file.name.endsWith('.docx')) {
             showToast('Please upload a .docx file', 'error', 5000);
@@ -180,19 +210,34 @@ export default function ReportsPage() {
 
         setUploadingTemplate(true);
         try {
-            // Save to IndexedDB (client-side storage)
-            await templateStorage.saveTemplate(file);
+            // Upload to server
+            const formData = new FormData();
+            formData.append('file', file);
 
-            // Save file name to localStorage for display
-            localStorage.setItem('template_file_name', file.name);
-            setTemplateFileName(file.name);
-            setHasTemplate(true);
+            const response = await fetch('/api/templates/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to upload template');
+            }
+
+            const data = await response.json();
+
+            // Refresh template list
+            await checkTemplateExists();
+
+            // Auto-select the newly uploaded template
+            setSelectedTemplateId(data.template.id);
 
             showToast('Template uploaded successfully!', 'success', 5000);
             setShowUploadModal(false);
         } catch (error) {
             console.error('Error uploading template:', error);
-            showToast('Failed to upload template. Please try again.', 'error', 5000);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to upload template. Please try again.';
+            showToast(errorMessage, 'error', 5000);
         } finally {
             setUploadingTemplate(false);
             if (fileInputRef.current) {
@@ -201,16 +246,88 @@ export default function ReportsPage() {
         }
     };
 
-    const handleDeleteTemplate = async () => {
+    const handleTemplateUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        await validateAndUploadFile(file);
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const file = e.dataTransfer.files?.[0];
+        if (!file) return;
+        await validateAndUploadFile(file);
+    };
+
+    const handleDeleteTemplate = async (templateId: string) => {
         try {
-            await templateStorage.deleteTemplate();
-            localStorage.removeItem('template_file_name');
-            setHasTemplate(false);
-            setTemplateFileName(null);
+            const response = await fetch(`/api/templates/${templateId}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to delete template');
+            }
+
+            await checkTemplateExists();
             showToast('Template deleted successfully', 'success', 3000);
         } catch (error) {
             console.error('Error deleting template:', error);
-            showToast('Failed to delete template', 'error', 3000);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to delete template';
+            showToast(errorMessage, 'error', 3000);
+        }
+    };
+
+    const selectTemplate = async (templateId: string) => {
+        try {
+            const response = await fetch('/api/templates/select', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ templateId }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to select template');
+            }
+        } catch (error) {
+            console.error('Error selecting template:', error);
+            throw error;
+        }
+    };
+
+    const handleSelectTemplate = async (templateId: string) => {
+        try {
+            await selectTemplate(templateId);
+            setSelectedTemplateId(templateId);
+            const selectedTemplate = templates.find(t => t.id === templateId);
+            if (selectedTemplate) {
+                setTemplateFileName(selectedTemplate.name);
+            }
+            setShowTemplateSelector(false);
+            showToast('Template selected successfully', 'success', 3000);
+        } catch (error) {
+            console.error('Error selecting template:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Failed to select template';
+            showToast(errorMessage, 'error', 3000);
         }
     };
 
@@ -268,13 +385,16 @@ export default function ReportsPage() {
                 };
             });
 
-            // Fetch the template file from IndexedDB or fallback to public folder
+            // Fetch the template file from server or fallback to public folder
             let templateArrayBuffer: ArrayBuffer;
-            const storedTemplate = await templateStorage.getTemplate();
-
-            if (storedTemplate) {
-                templateArrayBuffer = storedTemplate;
-            } else {
+            try {
+                const templateResponse = await fetch('/api/templates/selected');
+                if (templateResponse.ok) {
+                    templateArrayBuffer = await templateResponse.arrayBuffer();
+                } else {
+                    throw new Error('No template selected');
+                }
+            } catch {
                 // Fallback to default template in public folder
                 const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
                 templateArrayBuffer = await templateResponse.arrayBuffer();
@@ -337,13 +457,16 @@ export default function ReportsPage() {
                 attendance: record.status === 'present' ? '✓' : 'X'
             }));
 
-            // Fetch the template file from IndexedDB or fallback to public folder
+            // Fetch the template file from server or fallback to public folder
             let templateArrayBuffer: ArrayBuffer;
-            const storedTemplate = await templateStorage.getTemplate();
-
-            if (storedTemplate) {
-                templateArrayBuffer = storedTemplate;
-            } else {
+            try {
+                const templateResponse = await fetch('/api/templates/selected');
+                if (templateResponse.ok) {
+                    templateArrayBuffer = await templateResponse.arrayBuffer();
+                } else {
+                    throw new Error('No template selected');
+                }
+            } catch {
                 // Fallback to default template in public folder
                 const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
                 templateArrayBuffer = await templateResponse.arrayBuffer();
@@ -473,20 +596,32 @@ export default function ReportsPage() {
                         </div>
                     </div>
                 </div>
-                {hasTemplate && templateFileName && (
-                    <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                            <FileText className="w-5 h-5 text-green-600" />
-                            <span className="text-sm font-medium text-green-800">
-                                Template: <span className="font-semibold">{templateFileName}</span>
-                            </span>
+                {hasTemplate && templates.length > 0 && (
+                    <div className="mt-4 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                                <FileText className="w-5 h-5 text-green-600" />
+                                <span className="text-sm font-medium text-green-800">
+                                    {templateFileName ? (
+                                        <>Template: <span className="font-semibold">{templateFileName}</span></>
+                                    ) : (
+                                        'No template selected'
+                                    )}
+                                </span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={() => setShowTemplateSelector(true)}
+                                    className="px-3 py-1.5 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors flex items-center space-x-2"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    <span>{templates.length > 1 ? 'Choose Template' : 'View Template'}</span>
+                                </button>
+                            </div>
                         </div>
-                        <button
-                            onClick={handleDeleteTemplate}
-                            className="text-red-600 hover:text-red-700 text-sm font-medium"
-                        >
-                            Remove
-                        </button>
+                        <div className="mt-2 text-xs text-green-700">
+                            {templates.length} template{templates.length !== 1 ? 's' : ''} available
+                        </div>
                     </div>
                 )}
             </div>
@@ -753,11 +888,27 @@ export default function ReportsPage() {
                                         className="hidden"
                                         disabled={uploadingTemplate}
                                     />
-                                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:border-indigo-400 transition-colors cursor-pointer">
+                                    <div
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                        onClick={() => !uploadingTemplate && fileInputRef.current?.click()}
+                                        className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${isDragging
+                                            ? 'border-indigo-500 bg-indigo-50 scale-105'
+                                            : uploadingTemplate
+                                                ? 'border-slate-300 bg-slate-50 cursor-not-allowed'
+                                                : 'border-slate-300 hover:border-indigo-400 hover:bg-indigo-50'
+                                            }`}
+                                    >
                                         <div className="flex flex-col items-center">
-                                            <Upload className="w-12 h-12 text-slate-400 mb-2" />
+                                            <Upload className={`w-12 h-12 mb-2 ${isDragging ? 'text-indigo-600' : 'text-slate-400'
+                                                }`} />
                                             <span className="text-sm text-slate-600">
-                                                {uploadingTemplate ? 'Uploading...' : 'Click to select or drag and drop'}
+                                                {uploadingTemplate
+                                                    ? 'Uploading...'
+                                                    : isDragging
+                                                        ? 'Drop file here'
+                                                        : 'Click to select or drag and drop'}
                                             </span>
                                             <span className="text-xs text-slate-500 mt-1">Maximum file size: 10MB</span>
                                         </div>
@@ -785,6 +936,98 @@ export default function ReportsPage() {
                                 disabled={uploadingTemplate}
                             >
                                 Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Template Selector Modal */}
+            {showTemplateSelector && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-slate-800 flex items-center space-x-2">
+                                <FileText className="w-6 h-6 text-indigo-600" />
+                                <span>Choose Template</span>
+                            </h2>
+                            <button
+                                onClick={() => setShowTemplateSelector(false)}
+                                className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <div className="mb-4">
+                            <p className="text-sm text-slate-600 mb-4">
+                                Select a template to use for report generation:
+                            </p>
+
+                            <div className="space-y-2 max-h-96 overflow-y-auto">
+                                {templates.length === 0 ? (
+                                    <div className="text-center py-8 text-slate-500">
+                                        <FileText className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                                        <p>No templates uploaded yet</p>
+                                        <p className="text-xs mt-1">Upload a template to get started</p>
+                                    </div>
+                                ) : (
+                                    templates.map((template) => (
+                                        <div
+                                            key={template.id}
+                                            className={`p-4 rounded-lg border-2 transition-all ${selectedTemplateId === template.id
+                                                ? 'border-indigo-500 bg-indigo-50'
+                                                : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div
+                                                    className="flex items-center space-x-3 flex-1 cursor-pointer"
+                                                    onClick={() => handleSelectTemplate(template.id)}
+                                                >
+                                                    <FileText className={`w-5 h-5 ${selectedTemplateId === template.id
+                                                        ? 'text-indigo-600'
+                                                        : 'text-slate-400'
+                                                        }`} />
+                                                    <div className="flex-1">
+                                                        <div className="font-medium text-slate-800">
+                                                            {template.name}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1">
+                                                            {(template.size / 1024).toFixed(2)} KB • {new Date(template.uploadedAt).toLocaleDateString()}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    {selectedTemplateId === template.id && (
+                                                        <CheckCircle className="w-5 h-5 text-indigo-600" />
+                                                    )}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (confirm(`Are you sure you want to delete "${template.name}"?`)) {
+                                                                handleDeleteTemplate(template.id);
+                                                            }
+                                                        }}
+                                                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="Delete template"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end space-x-3 mt-6">
+                            <button
+                                onClick={() => setShowTemplateSelector(false)}
+                                className="px-4 py-2 text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors font-medium"
+                            >
+                                Close
                             </button>
                         </div>
                     </div>

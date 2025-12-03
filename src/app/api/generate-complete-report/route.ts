@@ -37,7 +37,7 @@ interface StudentData {
     no: string;
     name: string;
     course_year: string;
-    [key: string]: string; // For dynamic date1, date2, etc. properties
+    [key: string]: string; // For dynamic attendance1, attendance2, etc. properties
 }
 
 interface TemplateData {
@@ -92,10 +92,10 @@ function formatDate(date: Timestamp | string | undefined): string {
             return 'N/A';
         }
 
-        // Format as mm/dd/yyyy
+        // Format as mm/dd/yy
         const month = String(dateObj.getMonth() + 1).padStart(2, '0');
         const day = String(dateObj.getDate()).padStart(2, '0');
-        const year = dateObj.getFullYear();
+        const year = String(dateObj.getFullYear()).slice(-2); // Get last 2 digits of year
         return `${month}/${day}/${year}`;
     } catch {
         // If formatting fails, return the original value or 'N/A'
@@ -228,13 +228,15 @@ export async function POST(request: NextRequest) {
         const studentsData = Array.from(studentMap.values())
             .sort((a, b) => a.student_name.localeCompare(b.student_name))
             .map((student, index) => {
-                // Build attendance object with date1, date2, etc.
+                // Build attendance object with attendance1, attendance2, etc.
                 const attendanceByDateIndex: { [key: string]: string } = {};
 
-                // Initialize all date columns (up to 10) with empty string
+                // Initialize all attendance columns (up to 10) with empty string
                 for (let i = 1; i <= dates.length; i++) {
                     const dateKey = `date${i}`;
-                    attendanceByDateIndex[dateKey] = student.attendance[dateKey] || '';
+                    const attendanceKey = `attendance${i}`;
+                    // Get attendance symbol from student.attendance using dateKey
+                    attendanceByDateIndex[attendanceKey] = student.attendance[dateKey] || '';
                 }
 
                 return {

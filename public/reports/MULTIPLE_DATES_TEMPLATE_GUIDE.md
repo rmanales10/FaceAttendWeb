@@ -23,7 +23,7 @@ This guide explains how to modify your Word template to support **multiple date 
 │ No.│ Name of Student  │ Course &Year│{date1}│{date2}│{date3}│ ... │
 ├────┼──────────────────┼─────────────┼──────┼──────┼──────┼──────┤
 │{#students}                                                      │
-│{no}│ {name}           │ {course_year}│{date1}│{date2}│{date3}│ ... │
+│{no}│ {name}           │ {course_year}│{attendance1}│{attendance2}│{attendance3}│ ... │
 │{/students}                                                      │
 └────┴──────────────────┴─────────────┴──────┴──────┴──────┴──────┘
 ```
@@ -43,18 +43,21 @@ This guide explains how to modify your Word template to support **multiple date 
 | No. | Name of Student | Course & Year | {date1} | {date2} | {date3} | {date4} | {date5} | {date6} | {date7} | {date8} | {date9} | {date10} |
 ```
 
-**Note:** The API will only populate dates that exist (up to 10). If you have fewer dates, the extra columns will show empty.
+**Note:** 
+- Header row uses `{date1}`, `{date2}`, etc. to show the actual dates
+- Student row uses `{attendance1}`, `{attendance2}`, etc. to show attendance symbols
+- The API will only populate dates that exist (up to 10). If you have fewer dates, the extra columns will show empty.
 
 ### Step 2: Update the Student Data Row
 
 1. Find the row inside the `{#students}...{/students}` loop
-2. Replace the single `{attendance}` cell with multiple date cells
-3. Each cell should reference the date property: `{date1}`, `{date2}`, etc.
+2. Replace the single `{attendance}` cell with multiple attendance cells
+3. Each cell should reference the attendance property: `{attendance1}`, `{attendance2}`, etc.
 
 **Example Student Row:**
 ```
 {#students}
-| {no} | {name} | {course_year} | {date1} | {date2} | {date3} | {date4} | {date5} | {date6} | {date7} | {date8} | {date9} | {date10} |
+| {no} | {name} | {course_year} | {attendance1} | {attendance2} | {attendance3} | {attendance4} | {attendance5} | {attendance6} | {attendance7} | {attendance8} | {attendance9} | {attendance10} |
 {/students}
 ```
 
@@ -76,10 +79,10 @@ The API sends data in this format:
       no: "1",
       name: "John Doe",
       course_year: "BSIT 4D",
-      date1: "✓",  // Present on date1
-      date2: "X",  // Absent on date2
-      date3: "L",  // Late on date3
-      date4: "E",  // Excuse on date4
+      attendance1: "✓",  // Present on date1
+      attendance2: "X",  // Absent on date2
+      attendance3: "L",  // Late on date3
+      attendance4: "E",  // Excuse on date4
       // ... attendance for each date ...
     },
     // ... more students ...
@@ -111,7 +114,7 @@ Bldg. and Room No.: {building_room}
 │ No.│ Name of Student  │ Course &Year│ {date1}    │ {date2}    │ {date3}    │ {date4}    │ {date5}    │ {date6}    │ {date7}    │ {date8}    │ {date9}    │ {date10}   │
 ├────┼──────────────────┼─────────────┼────────────┼────────────┼────────────┼────────────┼────────────┼────────────┼────────────┼────────────┼────────────┼────────────┤
 │{#students}                                                                                                                                                          │
-│ {no}│ {name}           │ {course_year}│ {date1}    │ {date2}    │ {date3}    │ {date4}    │ {date5}    │ {date6}    │ {date7}    │ {date8}    │ {date9}    │ {date10}   │
+│ {no}│ {name}           │ {course_year}│ {attendance1}│ {attendance2}│ {attendance3}│ {attendance4}│ {attendance5}│ {attendance6}│ {attendance7}│ {attendance8}│ {attendance9}│ {attendance10}│
 │{/students}                                                                                                                                                          │
 └────┴──────────────────┴─────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┴────────────┘
 
@@ -162,7 +165,7 @@ If you want to show only the dates that exist, you would need to modify the API 
 - `{no}` - Student number (1, 2, 3...)
 - `{name}` - Student name
 - `{course_year}` - Course and year (e.g., "BSIT 4D")
-- `{date1}` through `{date10}` - Attendance symbol for each date (✓, L, or X)
+- `{attendance1}` through `{attendance10}` - Attendance symbol for each date (✓, L, X, or E)
 
 **Other Available Fields:**
 - `{subject}` - Subject name

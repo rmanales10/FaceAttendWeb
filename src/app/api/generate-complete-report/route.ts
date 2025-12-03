@@ -55,17 +55,52 @@ interface TemplateData {
 
 function formatDate(date: Timestamp | string | undefined): string {
     if (!date) return 'N/A';
-    if (date instanceof Timestamp) {
-        return date.toDate().toLocaleDateString('en-US', {
-            month: 'long',
-            day: 'numeric',
-            year: 'numeric',
-        });
+
+    try {
+        let dateObj: Date;
+
+        if (date instanceof Timestamp) {
+            dateObj = date.toDate();
+        } else if (typeof date === 'string') {
+            // Try to parse the string date
+            dateObj = new Date(date);
+            // Check if date is valid
+            if (isNaN(dateObj.getTime())) {
+                // If it's already in mm/dd/yyyy format, return it
+                // Otherwise try to parse it differently
+                const parts = date.split(/[\/\-]/);
+                if (parts.length === 3) {
+                    // Try to parse as mm/dd/yyyy or yyyy-mm-dd
+                    const month = parseInt(parts[0], 10);
+                    const day = parseInt(parts[1], 10);
+                    const year = parseInt(parts[2], 10);
+                    if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+                        // If first part is > 12, it's probably yyyy-mm-dd
+                        if (month > 12) {
+                            dateObj = new Date(year, month - 1, day);
+                        } else {
+                            dateObj = new Date(year, month - 1, day);
+                        }
+                    } else {
+                        return date; // Return as-is if can't parse
+                    }
+                } else {
+                    return date; // Return as-is if format is unknown
+                }
+            }
+        } else {
+            return 'N/A';
+        }
+
+        // Format as mm/dd/yyyy
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${month}/${day}/${year}`;
+    } catch {
+        // If formatting fails, return the original value or 'N/A'
+        return typeof date === 'string' ? date : 'N/A';
     }
-    if (typeof date === 'string') {
-        return date;
-    }
-    return 'N/A';
 }
 
 export async function POST(request: NextRequest) {
@@ -132,10 +167,27 @@ export async function POST(request: NextRequest) {
         const department = firstRecord.class_schedule?.department || 'N/A';
 
         // Process each attendance record
+        // Use a map to track date index and ensure consistent date formatting
+        const dateIndexMap = new Map<string, number>(); // Maps formatted date to index
         const dates: string[] = [];
+
         sortedData.forEach((attendanceData) => {
-            const reportDate = attendanceData.attendance_date || formatDate(attendanceData.date);
-            dates.push(reportDate);
+            // Format date consistently
+            let reportDate: string;
+            if (attendanceData.attendance_date) {
+                // If attendance_date is already a formatted string, use it
+                reportDate = attendanceData.attendance_date;
+            } else {
+                // Otherwise format it
+                reportDate = formatDate(attendanceData.date);
+            }
+
+            // Only add unique dates
+            if (!dateIndexMap.has(reportDate)) {
+                const dateIndex = dates.length;
+                dates.push(reportDate);
+                dateIndexMap.set(reportDate, dateIndex);
+            }
 
             const attendanceStudents = attendanceData.attendance_records || [];
 
@@ -166,7 +218,9 @@ export async function POST(request: NextRequest) {
                     attendanceSymbol = 'X';
                 }
 
-                student.attendance[reportDate] = attendanceSymbol;
+                // Store attendance by date index key (date1, date2, etc.)
+                const dateIndex = dateIndexMap.get(reportDate)!;
+                student.attendance[`date${dateIndex + 1}`] = attendanceSymbol;
             });
         });
 
@@ -174,11 +228,14 @@ export async function POST(request: NextRequest) {
         const studentsData = Array.from(studentMap.values())
             .sort((a, b) => a.student_name.localeCompare(b.student_name))
             .map((student, index) => {
-                // Map attendance by date to date1, date2, etc.
+                // Build attendance object with date1, date2, etc.
                 const attendanceByDateIndex: { [key: string]: string } = {};
-                dates.forEach((date, dateIndex) => {
-                    attendanceByDateIndex[`date${dateIndex + 1}`] = student.attendance[date] || '';
-                });
+
+                // Initialize all date columns (up to 10) with empty string
+                for (let i = 1; i <= dates.length; i++) {
+                    const dateKey = `date${i}`;
+                    attendanceByDateIndex[dateKey] = student.attendance[dateKey] || '';
+                }
 
                 return {
                     no: (index + 1).toString(),
@@ -215,9 +272,11 @@ export async function POST(request: NextRequest) {
         };
 
         // Add date columns (up to 10)
-        dates.forEach((date, index) => {
-            templateData[`date${index + 1}`] = date;
-        });
+        // Initialize all date columns, filling with empty string if no date exists
+        for (let i = 1; i <= 10; i++) {
+            const dateIndex = i - 1;
+            templateData[`date${i}`] = dates[dateIndex] || '';
+        }
 
         // Set the template data
         doc.render(templateData);

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, getDocs, orderBy, query, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/components/Toast/Toast';
-import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle, User, Upload, X, FileUp } from 'lucide-react';
+import { FileText, Download, Calendar, Loader2, Users, CheckCircle, XCircle, GraduationCap, UserCircle, User, Upload, X, FileUp, RefreshCw } from 'lucide-react';
 import { saveAs } from 'file-saver';
 import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
@@ -18,15 +18,15 @@ interface TemplateInfo {
 interface AttendanceRecord {
     student_id: string;
     student_name: string;
-    status: 'present' | 'absent' | 'late';
-    state?: 'Present' | 'Late' | 'Absent';
+    status: 'present' | 'absent' | 'late' | 'excuse';
+    state?: 'Present' | 'Late' | 'Absent' | 'Excuse';
     attendance_type?: 'face' | 'manual';
 }
 
 interface FacultyAttendanceRecord {
     teacher_id: string;
     teacher_name: string;
-    status: 'present' | 'absent' | 'late';
+    status: 'present' | 'absent' | 'late' | 'excuse';
     attendance_type?: 'face' | 'manual';
 }
 
@@ -80,13 +80,27 @@ interface FacultyAttendance {
     created_at?: Timestamp;
 }
 
-type AttendanceCategory = 'student' | 'faculty';
+type AttendanceCategory = 'student' | 'faculty' | 'saved';
+
+interface SavedReport {
+    id: string;
+    attendance_id: string; // Comma-separated attendance IDs
+    subject: string;
+    section: string;
+    date: string;
+    type: string;
+    date_range?: string;
+    user_id?: string;
+    created_at?: Timestamp;
+    updated_at?: Timestamp;
+}
 
 export default function ReportsPage() {
     const { showToast } = useToast();
     const [studentAttendanceRecords, setStudentAttendanceRecords] = useState<ClassAttendance[]>([]);
     const [facultyAttendanceRecords, setFacultyAttendanceRecords] = useState<FacultyAttendance[]>([]);
-    const [activeCategory, setActiveCategory] = useState<AttendanceCategory>('student');
+    const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+    const [activeCategory, setActiveCategory] = useState<AttendanceCategory>('saved');
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -107,15 +121,31 @@ export default function ReportsPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Refresh saved reports when switching to saved category
+    useEffect(() => {
+        if (activeCategory === 'saved') {
+            fetchSavedReports().then(reports => {
+                setSavedReports(reports);
+                console.log('Fetched saved reports:', reports.length);
+            });
+        }
+    }, [activeCategory]);
+
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [studentData, facultyData] = await Promise.all([
-                fetchStudentAttendance(),
-                fetchFacultyAttendance()
-            ]);
-            setStudentAttendanceRecords(studentData);
-            setFacultyAttendanceRecords(facultyData);
+            // Commented out: Student and Faculty attendance fetching
+            // const [studentData, facultyData, savedReportsData] = await Promise.all([
+            //     fetchStudentAttendance(),
+            //     fetchFacultyAttendance(),
+            //     fetchSavedReports()
+            // ]);
+            // setStudentAttendanceRecords(studentData);
+            // setFacultyAttendanceRecords(facultyData);
+
+            // Only fetch saved reports for now
+            const savedReportsData = await fetchSavedReports();
+            setSavedReports(savedReportsData);
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -153,6 +183,46 @@ export default function ReportsPage() {
             } as FacultyAttendance));
         } catch (error) {
             console.error('Error fetching faculty attendance:', error);
+            return [];
+        }
+    };
+
+    const fetchSavedReports = async (): Promise<SavedReport[]> => {
+        try {
+            // Fetch all reports, then filter and sort in memory
+            // This is more flexible than using orderBy which requires an index
+            const reportsCollection = collection(db, 'reports');
+            const snapshot = await getDocs(reportsCollection);
+
+            const allReports = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as SavedReport));
+
+            // Filter to only show "Complete Attendance Report" type
+            const completeReports = allReports.filter(report =>
+                report.type === 'Complete Attendance Report'
+            );
+
+            // Sort by created_at or updated_at (most recent first)
+            completeReports.sort((a, b) => {
+                const aTime = a.created_at || a.updated_at;
+                const bTime = b.created_at || b.updated_at;
+
+                if (!aTime && !bTime) return 0;
+                if (!aTime) return 1;
+                if (!bTime) return -1;
+
+                // Convert Timestamp to Date for comparison
+                const aDate = aTime instanceof Timestamp ? aTime.toDate() : new Date(aTime);
+                const bDate = bTime instanceof Timestamp ? bTime.toDate() : new Date(bTime);
+
+                return bDate.getTime() - aDate.getTime(); // Descending order
+            });
+
+            return completeReports;
+        } catch (error) {
+            console.error('Error fetching saved reports:', error);
             return [];
         }
     };
@@ -343,16 +413,34 @@ export default function ReportsPage() {
                 });
             }
             if (typeof date === 'string') {
-                return new Date(date).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                });
+                // If it's already a formatted date string, return it
+                if (date.includes(',') || date.includes(' ')) {
+                    return date;
+                }
+                const parsedDate = new Date(date);
+                if (!isNaN(parsedDate.getTime())) {
+                    return parsedDate.toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                    });
+                }
+                return date;
             }
             return 'N/A';
         } catch {
             return 'N/A';
         }
+    };
+
+    const sanitizeFileName = (name: string): string => {
+        // Remove or replace invalid filename characters
+        return name
+            .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid characters
+            .replace(/,/g, '_') // Replace commas
+            .replace(/\s+/g, '_') // Replace spaces
+            .replace(/_+/g, '_') // Replace multiple underscores with single
+            .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
     };
 
     const generateStudentDOCX = async (attendanceData: ClassAttendance) => {
@@ -364,6 +452,11 @@ export default function ReportsPage() {
             // Get all students from the attendance records
             const attendanceStudents = attendanceData.attendance_records || [];
 
+            if (attendanceStudents.length === 0) {
+                showToast('No attendance records found for this class.', 'error', 5000);
+                return;
+            }
+
             // Prepare student data for the template
             const studentsData = attendanceStudents.map((record, index) => {
                 // Determine attendance symbol based on state field
@@ -373,6 +466,8 @@ export default function ReportsPage() {
                     attendanceSymbol = '✓';
                 } else if (state === 'Late' || state === 'late') {
                     attendanceSymbol = 'L';
+                } else if (state === 'Excuse' || state === 'excuse') {
+                    attendanceSymbol = 'E';
                 } else {
                     attendanceSymbol = 'X';
                 }
@@ -387,54 +482,94 @@ export default function ReportsPage() {
 
             // Fetch the template file from server or fallback to public folder
             let templateArrayBuffer: ArrayBuffer;
+            let templateError: Error | null = null;
+
             try {
                 const templateResponse = await fetch('/api/templates/selected');
-                if (templateResponse.ok) {
+                if (templateResponse.ok && templateResponse.status === 200) {
                     templateArrayBuffer = await templateResponse.arrayBuffer();
                 } else {
-                    throw new Error('No template selected');
+                    throw new Error('Template not found in storage');
                 }
-            } catch {
+            } catch (error) {
+                templateError = error instanceof Error ? error : new Error('Failed to fetch template');
                 // Fallback to default template in public folder
-                const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
-                templateArrayBuffer = await templateResponse.arrayBuffer();
+                try {
+                    const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
+                    if (!templateResponse.ok) {
+                        throw new Error('Default template not found');
+                    }
+                    templateArrayBuffer = await templateResponse.arrayBuffer();
+                } catch (fallbackError) {
+                    showToast('Template file not found. Please upload a template first.', 'error', 5000);
+                    console.error('Template fetch error:', templateError, fallbackError);
+                    return;
+                }
             }
 
             // Load the template
-            const zip = new PizZip(templateArrayBuffer);
-            const doc = new Docxtemplater(zip, {
-                paragraphLoop: true,
-                linebreaks: true,
-            });
+            let zip: PizZip;
+            let doc: Docxtemplater;
+
+            try {
+                zip = new PizZip(templateArrayBuffer);
+                doc = new Docxtemplater(zip, {
+                    paragraphLoop: true,
+                    linebreaks: true,
+                });
+            } catch (error) {
+                showToast('Failed to load template. The template file may be corrupted.', 'error', 5000);
+                console.error('Template loading error:', error);
+                return;
+            }
 
             // Set the template data
-            doc.render({
-                subject: attendanceData.class_schedule?.subject_name || attendanceData.subject || 'N/A',
-                course_code: attendanceData.class_schedule?.course_code || 'N/A',
-                schedule: attendanceData.class_schedule?.schedule || attendanceData.time || 'N/A',
-                building_room: attendanceData.class_schedule?.building_room || 'N/A',
-                date: reportDate,
-                teacher: attendanceData.class_schedule?.teacher_name || 'N/A',
-                students: studentsData,
-                total_students: (attendanceData.total_students || attendanceStudents.length).toString(),
-                present_count: (attendanceData.present_count || 0).toString(),
-                absent_count: (attendanceData.absent_count || 0).toString(),
-                course_year: attendanceData.class_schedule?.course_year || attendanceData.section || 'N/A',
-                department: attendanceData.class_schedule?.department || 'N/A',
-            });
+            try {
+                doc.render({
+                    subject: attendanceData.class_schedule?.subject_name || attendanceData.subject || 'N/A',
+                    course_code: attendanceData.class_schedule?.course_code || 'N/A',
+                    schedule: attendanceData.class_schedule?.schedule || attendanceData.time || 'N/A',
+                    building_room: attendanceData.class_schedule?.building_room || 'N/A',
+                    date: reportDate,
+                    teacher: attendanceData.class_schedule?.teacher_name || 'N/A',
+                    students: studentsData,
+                    total_students: (attendanceData.total_students || attendanceStudents.length).toString(),
+                    present_count: (attendanceData.present_count || 0).toString(),
+                    absent_count: (attendanceData.absent_count || 0).toString(),
+                    course_year: attendanceData.class_schedule?.course_year || attendanceData.section || 'N/A',
+                    department: attendanceData.class_schedule?.department || 'N/A',
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                showToast(`Template rendering error: ${errorMessage}. Please check your template format.`, 'error', 5000);
+                console.error('Template rendering error:', error);
+                return;
+            }
 
             // Generate the output document
-            const output = doc.getZip().generate({
-                type: 'blob',
-                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            });
+            let output: Blob;
+            try {
+                output = doc.getZip().generate({
+                    type: 'blob',
+                    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                });
+            } catch (error) {
+                showToast('Failed to generate document. Please try again.', 'error', 5000);
+                console.error('Document generation error:', error);
+                return;
+            }
 
             const subjectName = attendanceData.class_schedule?.subject_name || attendanceData.subject || 'Attendance';
-            const fileName = `Student_Attendance_${subjectName.replace(/\s+/g, '_')}_${reportDate.replace(/\s+/g, '_')}.docx`;
+            const sanitizedSubject = sanitizeFileName(subjectName);
+            const sanitizedDate = sanitizeFileName(reportDate);
+            const fileName = `Student_Attendance_${sanitizedSubject}_${sanitizedDate}.docx`;
+
             saveAs(output, fileName);
+            showToast('Report generated successfully!', 'success', 3000);
         } catch (error) {
             console.error('Error generating DOCX:', error);
-            showToast('Failed to generate report. Please try again.', 'error', 5000);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            showToast(`Failed to generate report: ${errorMessage}`, 'error', 5000);
         } finally {
             setGenerating(false);
         }
@@ -449,71 +584,187 @@ export default function ReportsPage() {
             // Get all faculty from the attendance records
             const attendanceFaculty = attendanceData.attendance_records || [];
 
+            if (attendanceFaculty.length === 0) {
+                showToast('No attendance records found for this faculty.', 'error', 5000);
+                return;
+            }
+
             // Prepare faculty data for the template (adapt to use similar structure)
-            const facultyData = attendanceFaculty.map((record, index) => ({
-                no: (index + 1).toString(),
-                name: record.teacher_name || 'N/A',
-                course_year: attendanceData.department || 'N/A',
-                attendance: record.status === 'present' ? '✓' : 'X'
-            }));
+            const facultyData = attendanceFaculty.map((record, index) => {
+                let attendanceSymbol = 'X';
+                const status = record.status;
+                if (status === 'present') {
+                    attendanceSymbol = '✓';
+                } else if (status === 'late') {
+                    attendanceSymbol = 'L';
+                } else if (status === 'excuse') {
+                    attendanceSymbol = 'E';
+                } else {
+                    attendanceSymbol = 'X';
+                }
+
+                return {
+                    no: (index + 1).toString(),
+                    name: record.teacher_name || 'N/A',
+                    course_year: attendanceData.department || 'N/A',
+                    attendance: attendanceSymbol
+                };
+            });
 
             // Fetch the template file from server or fallback to public folder
             let templateArrayBuffer: ArrayBuffer;
+            let templateError: Error | null = null;
+
             try {
                 const templateResponse = await fetch('/api/templates/selected');
-                if (templateResponse.ok) {
+                if (templateResponse.ok && templateResponse.status === 200) {
                     templateArrayBuffer = await templateResponse.arrayBuffer();
                 } else {
-                    throw new Error('No template selected');
+                    throw new Error('Template not found in storage');
                 }
-            } catch {
+            } catch (error) {
+                templateError = error instanceof Error ? error : new Error('Failed to fetch template');
                 // Fallback to default template in public folder
-                const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
-                templateArrayBuffer = await templateResponse.arrayBuffer();
+                try {
+                    const templateResponse = await fetch('/reports/FM-USTP-ACAD-06-Attendance-and-Punctuality-Monitoring-Sheet.docx');
+                    if (!templateResponse.ok) {
+                        throw new Error('Default template not found');
+                    }
+                    templateArrayBuffer = await templateResponse.arrayBuffer();
+                } catch (fallbackError) {
+                    showToast('Template file not found. Please upload a template first.', 'error', 5000);
+                    console.error('Template fetch error:', templateError, fallbackError);
+                    return;
+                }
             }
 
             // Load the template
-            const zip = new PizZip(templateArrayBuffer);
-            const doc = new Docxtemplater(zip, {
-                paragraphLoop: true,
-                linebreaks: true,
-            });
+            let zip: PizZip;
+            let doc: Docxtemplater;
+
+            try {
+                zip = new PizZip(templateArrayBuffer);
+                doc = new Docxtemplater(zip, {
+                    paragraphLoop: true,
+                    linebreaks: true,
+                });
+            } catch (error) {
+                showToast('Failed to load template. The template file may be corrupted.', 'error', 5000);
+                console.error('Template loading error:', error);
+                return;
+            }
 
             // Set the template data (adapt for faculty)
-            doc.render({
-                subject: attendanceData.class_schedule?.subject_name || attendanceData.subject || 'Faculty Attendance',
-                course_code: attendanceData.class_schedule?.course_code || 'N/A',
-                schedule: attendanceData.class_schedule?.schedule || attendanceData.time || 'N/A',
-                building_room: attendanceData.class_schedule?.building_room || 'N/A',
-                date: reportDate,
-                teacher: 'Faculty',
-                students: facultyData, // Reuse students array for faculty
-                total_students: (attendanceData.total_teachers || attendanceFaculty.length).toString(),
-                present_count: (attendanceData.present_count || 0).toString(),
-                absent_count: (attendanceData.absent_count || 0).toString(),
-                course_year: attendanceData.department || 'N/A',
-                department: attendanceData.department || attendanceData.class_schedule?.department || 'N/A',
-            });
+            try {
+                doc.render({
+                    subject: attendanceData.class_schedule?.subject_name || attendanceData.subject || 'Faculty Attendance',
+                    course_code: attendanceData.class_schedule?.course_code || 'N/A',
+                    schedule: attendanceData.class_schedule?.schedule || attendanceData.time || 'N/A',
+                    building_room: attendanceData.class_schedule?.building_room || 'N/A',
+                    date: reportDate,
+                    teacher: 'Faculty',
+                    students: facultyData, // Reuse students array for faculty
+                    total_students: (attendanceData.total_teachers || attendanceFaculty.length).toString(),
+                    present_count: (attendanceData.present_count || 0).toString(),
+                    absent_count: (attendanceData.absent_count || 0).toString(),
+                    course_year: attendanceData.department || 'N/A',
+                    department: attendanceData.department || attendanceData.class_schedule?.department || 'N/A',
+                });
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                showToast(`Template rendering error: ${errorMessage}. Please check your template format.`, 'error', 5000);
+                console.error('Template rendering error:', error);
+                return;
+            }
 
             // Generate the output document
-            const output = doc.getZip().generate({
-                type: 'blob',
-                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            });
+            let output: Blob;
+            try {
+                output = doc.getZip().generate({
+                    type: 'blob',
+                    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                });
+            } catch (error) {
+                showToast('Failed to generate document. Please try again.', 'error', 5000);
+                console.error('Document generation error:', error);
+                return;
+            }
 
             const subjectName = attendanceData.class_schedule?.subject_name || attendanceData.subject || 'Faculty_Attendance';
-            const fileName = `Faculty_Attendance_${subjectName.replace(/\s+/g, '_')}_${reportDate.replace(/\s+/g, '_')}.docx`;
+            const sanitizedSubject = sanitizeFileName(subjectName);
+            const sanitizedDate = sanitizeFileName(reportDate);
+            const fileName = `Faculty_Attendance_${sanitizedSubject}_${sanitizedDate}.docx`;
+
             saveAs(output, fileName);
+            showToast('Report generated successfully!', 'success', 3000);
         } catch (error) {
             console.error('Error generating DOCX:', error);
-            showToast('Failed to generate report. Please try again.', 'error', 5000);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            showToast(`Failed to generate report: ${errorMessage}`, 'error', 5000);
         } finally {
             setGenerating(false);
         }
     };
 
-    const currentRecords = activeCategory === 'student' ? studentAttendanceRecords : facultyAttendanceRecords;
-    const totalRecords = activeCategory === 'student' ? studentAttendanceRecords.length : facultyAttendanceRecords.length;
+    const generateCompleteReport = async (savedReport: SavedReport) => {
+        setGenerating(true);
+        try {
+            // Extract attendance IDs from comma-separated string
+            const attendanceIds = savedReport.attendance_id
+                .split(',')
+                .map(id => id.trim())
+                .filter(id => id.length > 0);
+
+            if (attendanceIds.length === 0) {
+                showToast('No attendance IDs found in this report.', 'error', 5000);
+                return;
+            }
+
+            // Call the API to generate the complete report
+            const response = await fetch('/api/generate-complete-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ attendanceIds }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Failed to generate report: ${response.status}`);
+            }
+
+            // Get the blob and download it
+            const blob = await response.blob();
+            const subjectName = savedReport.subject || 'Complete_Attendance';
+            const sectionName = savedReport.section || 'Report';
+            const dateRange = savedReport.date_range || savedReport.date || 'Report';
+            const sanitizedSubject = sanitizeFileName(subjectName);
+            const sanitizedSection = sanitizeFileName(sectionName);
+            const sanitizedDate = sanitizeFileName(dateRange);
+            const fileName = `${sanitizedSubject}_${sanitizedSection}_${sanitizedDate}.docx`;
+
+            saveAs(blob, fileName);
+            showToast('Complete attendance report downloaded successfully!', 'success', 3000);
+        } catch (error) {
+            console.error('Error generating complete report:', error);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            showToast(`Failed to generate report: ${errorMessage}`, 'error', 5000);
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    const currentRecords = activeCategory === 'student'
+        ? studentAttendanceRecords
+        : activeCategory === 'faculty'
+            ? facultyAttendanceRecords
+            : [];
+    const totalRecords = activeCategory === 'student'
+        ? studentAttendanceRecords.length
+        : activeCategory === 'faculty'
+            ? facultyAttendanceRecords.length
+            : savedReports.length;
 
     // Get unique teachers from records
     const getUniqueTeachers = (): string[] => {
@@ -529,37 +780,52 @@ export default function ReportsPage() {
 
     const uniqueTeachers = getUniqueTeachers();
 
-    const filteredRecords = currentRecords.filter(record => {
-        // Filter by teacher first
-        if (selectedTeacher) {
-            const teacherName = record.class_schedule?.teacher_name?.trim();
-            if (teacherName !== selectedTeacher) {
-                return false;
-            }
-        }
+    const filteredSavedReports = activeCategory === 'saved'
+        ? savedReports.filter(report => {
+            const searchLower = searchQuery.toLowerCase();
+            return (
+                (report.subject || '').toLowerCase().includes(searchLower) ||
+                (report.section || '').toLowerCase().includes(searchLower) ||
+                (report.date || '').toLowerCase().includes(searchLower) ||
+                (report.date_range || '').toLowerCase().includes(searchLower) ||
+                (report.type || '').toLowerCase().includes(searchLower)
+            );
+        })
+        : [];
 
-        // Then filter by search query
-        const searchLower = searchQuery.toLowerCase();
-        if (activeCategory === 'student') {
-            const studentRecord = record as ClassAttendance;
-            return (
-                (studentRecord.class_schedule?.subject_name || studentRecord.subject || '').toLowerCase().includes(searchLower) ||
-                (studentRecord.class_schedule?.course_code || '').toLowerCase().includes(searchLower) ||
-                (studentRecord.class_schedule?.course_year || studentRecord.section || '').toLowerCase().includes(searchLower) ||
-                formatDate(studentRecord.date || studentRecord.attendance_date).toLowerCase().includes(searchLower) ||
-                (studentRecord.class_schedule?.teacher_name || '').toLowerCase().includes(searchLower)
-            );
-        } else {
-            const facultyRecord = record as FacultyAttendance;
-            return (
-                (facultyRecord.class_schedule?.subject_name || facultyRecord.subject || '').toLowerCase().includes(searchLower) ||
-                (facultyRecord.class_schedule?.course_code || '').toLowerCase().includes(searchLower) ||
-                (facultyRecord.department || '').toLowerCase().includes(searchLower) ||
-                formatDate(facultyRecord.date || facultyRecord.attendance_date).toLowerCase().includes(searchLower) ||
-                (facultyRecord.class_schedule?.teacher_name || '').toLowerCase().includes(searchLower)
-            );
-        }
-    });
+    const filteredRecords = activeCategory === 'saved'
+        ? []
+        : currentRecords.filter(record => {
+            // Filter by teacher first
+            if (selectedTeacher) {
+                const teacherName = record.class_schedule?.teacher_name?.trim();
+                if (teacherName !== selectedTeacher) {
+                    return false;
+                }
+            }
+
+            // Then filter by search query
+            const searchLower = searchQuery.toLowerCase();
+            if (activeCategory === 'student') {
+                const studentRecord = record as ClassAttendance;
+                return (
+                    (studentRecord.class_schedule?.subject_name || studentRecord.subject || '').toLowerCase().includes(searchLower) ||
+                    (studentRecord.class_schedule?.course_code || '').toLowerCase().includes(searchLower) ||
+                    (studentRecord.class_schedule?.course_year || studentRecord.section || '').toLowerCase().includes(searchLower) ||
+                    formatDate(studentRecord.date || studentRecord.attendance_date).toLowerCase().includes(searchLower) ||
+                    (studentRecord.class_schedule?.teacher_name || '').toLowerCase().includes(searchLower)
+                );
+            } else {
+                const facultyRecord = record as FacultyAttendance;
+                return (
+                    (facultyRecord.class_schedule?.subject_name || facultyRecord.subject || '').toLowerCase().includes(searchLower) ||
+                    (facultyRecord.class_schedule?.course_code || '').toLowerCase().includes(searchLower) ||
+                    (facultyRecord.department || '').toLowerCase().includes(searchLower) ||
+                    formatDate(facultyRecord.date || facultyRecord.attendance_date).toLowerCase().includes(searchLower) ||
+                    (facultyRecord.class_schedule?.teacher_name || '').toLowerCase().includes(searchLower)
+                );
+            }
+        });
 
     if (loading) {
         return (
@@ -588,6 +854,32 @@ export default function ReportsPage() {
                             <FileUp className="w-4 h-4 sm:w-5 sm:h-5" />
                             <span className="font-semibold text-sm sm:text-base">Upload Template</span>
                         </button>
+                        {activeCategory === 'saved' && (
+                            <button
+                                onClick={async () => {
+                                    setLoading(true);
+                                    try {
+                                        const reports = await fetchSavedReports();
+                                        setSavedReports(reports);
+                                        showToast(`Refreshed! Found ${reports.length} saved report${reports.length !== 1 ? 's' : ''}.`, 'success', 3000);
+                                    } catch (error) {
+                                        showToast('Failed to refresh reports.', 'error', 3000);
+                                    } finally {
+                                        setLoading(false);
+                                    }
+                                }}
+                                disabled={loading}
+                                className="bg-gradient-to-r from-green-500 to-green-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-green-100 hover:from-green-600 hover:to-green-700 transition-all duration-200 flex items-center space-x-2 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Refresh saved reports"
+                            >
+                                {loading ? (
+                                    <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                                ) : (
+                                    <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                                )}
+                                <span className="font-semibold text-sm sm:text-base">Refresh</span>
+                            </button>
+                        )}
                         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl border border-blue-100 text-center sm:text-left">
                             <span className="text-slate-700 font-semibold text-sm sm:text-base">
                                 <FileText className="w-4 h-4 sm:w-5 sm:h-5 inline mr-2" />
@@ -629,7 +921,8 @@ export default function ReportsPage() {
             {/* Category Filter */}
             <div className="mb-6 sm:mb-8">
                 <div className="bg-white rounded-2xl p-2 shadow-sm border border-slate-200 inline-flex space-x-2">
-                    <button
+                    {/* Commented out: Student and Faculty attendance tabs - will enable later */}
+                    {/* <button
                         onClick={() => {
                             setActiveCategory('student');
                             setSelectedTeacher(null); // Reset teacher filter when switching category
@@ -662,12 +955,29 @@ export default function ReportsPage() {
                             }`}>
                             {facultyAttendanceRecords.length}
                         </span>
+                    </button> */}
+                    <button
+                        onClick={() => {
+                            setActiveCategory('saved');
+                            setSelectedTeacher(null); // Reset teacher filter when switching category
+                        }}
+                        className={`flex items-center space-x-2 px-4 sm:px-6 py-2.5 sm:py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-200 ${activeCategory === 'saved'
+                            ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md'
+                            : 'text-slate-600 hover:bg-slate-50'
+                            }`}
+                    >
+                        <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span>Saved Reports</span>
+                        <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${activeCategory === 'saved' ? 'bg-white text-green-600' : 'bg-green-100 text-green-700'
+                            }`}>
+                            {savedReports.length}
+                        </span>
                     </button>
                 </div>
             </div>
 
-            {/* Teacher Filter */}
-            {uniqueTeachers.length > 0 && (
+            {/* Teacher Filter - Commented out: Only relevant for student/faculty attendance */}
+            {/* {uniqueTeachers.length > 0 && activeCategory !== 'saved' && (
                 <div className="mb-6">
                     <div className="flex items-center space-x-2 mb-3">
                         <User className="w-5 h-5 text-indigo-500" />
@@ -710,7 +1020,7 @@ export default function ReportsPage() {
                         })}
                     </div>
                 </div>
-            )}
+            )} */}
 
             {/* Search Bar */}
             <div className="mb-6">
@@ -727,7 +1037,91 @@ export default function ReportsPage() {
             </div>
 
             {/* Attendance Records Grid */}
-            {filteredRecords.length === 0 ? (
+            {activeCategory === 'saved' ? (
+                filteredSavedReports.length === 0 ? (
+                    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
+                        <FileText className="w-20 h-20 mx-auto mb-4 text-slate-300" />
+                        <h3 className="text-xl font-semibold text-slate-800 mb-2">No Saved Reports Found</h3>
+                        <p className="text-slate-600">
+                            {searchQuery
+                                ? 'Try adjusting your search criteria'
+                                : 'No saved reports available yet. Reports saved from the mobile app will appear here.'}
+                        </p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                        {filteredSavedReports.map((report) => {
+                            const attendanceIds = report.attendance_id.split(',').filter(id => id.trim().length > 0);
+                            const dateCount = attendanceIds.length;
+
+                            return (
+                                <div
+                                    key={report.id}
+                                    className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-lg transition-all duration-200"
+                                >
+                                    {/* Header */}
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div className="flex-1">
+                                            <h3 className="font-bold text-slate-800 text-lg mb-1">
+                                                {report.subject || 'N/A'}
+                                            </h3>
+                                            <p className="text-sm text-slate-600 font-medium">
+                                                {report.section || 'N/A'}
+                                            </p>
+                                        </div>
+                                        <div className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
+                                            Complete
+                                        </div>
+                                    </div>
+
+                                    {/* Details */}
+                                    <div className="space-y-2 mb-4">
+                                        <div className="flex items-center text-sm text-slate-600">
+                                            <Calendar className="w-4 h-4 mr-2 text-blue-500" />
+                                            <span>{report.date || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex items-center text-sm text-slate-600">
+                                            <FileText className="w-4 h-4 mr-2 text-purple-500" />
+                                            <span className="font-medium">
+                                                {report.date_range || `${dateCount} date${dateCount !== 1 ? 's' : ''}`}
+                                            </span>
+                                        </div>
+                                        {attendanceIds.length > 0 && (
+                                            <div className="flex items-center text-xs text-slate-500">
+                                                <Users className="w-3 h-3 mr-2" />
+                                                <span>{attendanceIds.length} attendance record{attendanceIds.length !== 1 ? 's' : ''} included</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Generate Button */}
+                                    <button
+                                        onClick={() => generateCompleteReport(report)}
+                                        disabled={generating}
+                                        className={`w-full px-4 py-3 rounded-xl transition-all flex items-center justify-center space-x-2 font-medium shadow-md ${generating
+                                            ? 'bg-blue-400 text-white cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 hover:shadow-lg'
+                                            }`}
+                                        title="Download complete attendance report"
+                                    >
+                                        {generating ? (
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span>Generating...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Download className="w-5 h-5" />
+                                                <span>Download Report</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )
+            ) : filteredRecords.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center">
                     <FileText className="w-20 h-20 mx-auto mb-4 text-slate-300" />
                     <h3 className="text-xl font-semibold text-slate-800 mb-2">No Attendance Records Found</h3>

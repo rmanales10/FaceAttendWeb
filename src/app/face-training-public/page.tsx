@@ -54,11 +54,15 @@ function FaceTrainingSelfContent() {
     const loadModels = async () => {
         try {
             const MODEL_URL = '/models';
+            console.log('Loading face-api.js models from:', MODEL_URL);
+
+            // Load models - face-api.js handles TensorFlow.js internally
             await Promise.all([
                 faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                 faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                 faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
             ]);
+
             setModelsLoaded(true);
             console.log('Face-api.js models loaded successfully');
         } catch (error) {

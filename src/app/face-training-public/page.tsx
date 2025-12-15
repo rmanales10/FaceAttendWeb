@@ -16,12 +16,14 @@ import {
     AlertCircle
 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useToast } from '@/components/Toast/Toast';
 
 type PersonType = 'student' | 'teacher';
 
 function FaceTrainingSelfContent() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { showToast } = useToast();
     const personId = searchParams?.get('id');
     const personType = searchParams?.get('type') as PersonType | null;
 
@@ -35,7 +37,6 @@ function FaceTrainingSelfContent() {
     const [captureInterval, setCaptureInterval] = useState<NodeJS.Timeout | null>(null);
     const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
     const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
-    const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
 
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -67,7 +68,7 @@ function FaceTrainingSelfContent() {
             console.log('Face-api.js models loaded successfully');
         } catch (error) {
             console.error('Error loading models:', error);
-            showMessage('error', 'Failed to load face recognition models');
+            showToast('Failed to load face recognition models', 'error', 5000);
         }
     };
 
@@ -84,16 +85,12 @@ function FaceTrainingSelfContent() {
             }
         } catch (error) {
             console.error('Error fetching person:', error);
-            showMessage('error', 'Failed to load your information');
+            showToast('Failed to load your information', 'error', 5000);
         } finally {
             setLoading(false);
         }
     };
 
-    const showMessage = (type: 'success' | 'error' | 'warning', text: string) => {
-        setMessage({ type, text });
-        setTimeout(() => setMessage(null), 5000);
-    };
 
     const getCameras = async () => {
         try {
@@ -126,7 +123,7 @@ function FaceTrainingSelfContent() {
             await getCameras();
         } catch (err) {
             console.error('Error accessing camera:', err);
-            showMessage('error', 'Could not access camera. Please check permissions.');
+            showToast('Could not access camera. Please check permissions.', 'error', 5000);
         }
     };
 
@@ -152,7 +149,7 @@ function FaceTrainingSelfContent() {
                     }
                 } catch (err) {
                     console.error('Error switching camera:', err);
-                    showMessage('error', 'Could not switch camera.');
+                    showToast('Could not switch camera.', 'error', 5000);
                 }
             }, 100);
         }
@@ -202,19 +199,19 @@ function FaceTrainingSelfContent() {
 
             if (!detection) {
                 if (!isCapturingContinuously) {
-                    showMessage('warning', 'No face detected. Please position your face clearly in the camera.');
+                    showToast('No face detected. Please position your face clearly in the camera.', 'warning', 4000);
                 }
                 return;
             }
 
             setTrainingImages(prev => [...prev, imageData]);
             if (!isCapturingContinuously) {
-                showMessage('success', 'Image captured successfully!');
+                showToast('Image captured successfully!', 'success', 3000);
             }
         } catch (err) {
             console.error('Error detecting face:', err);
             if (!isCapturingContinuously) {
-                showMessage('error', 'Error detecting face. Please try again.');
+                showToast('Error detecting face. Please try again.', 'error', 4000);
             }
         }
     };
@@ -273,7 +270,7 @@ function FaceTrainingSelfContent() {
                     if (detection) {
                         setTrainingImages(prev => [...prev, imageData]);
                     } else {
-                        showMessage('warning', `No face detected in ${file.name}. Please upload a clear face image.`);
+                        showToast(`No face detected in ${file.name}. Please upload a clear face image.`, 'warning', 5000);
                     }
                 } catch (error) {
                     console.error('Error processing image:', error);
@@ -294,7 +291,7 @@ function FaceTrainingSelfContent() {
 
     const saveFaceTraining = async () => {
         if (trainingImages.length < 5) {
-            showMessage('warning', 'Please capture or upload at least 5 images for better accuracy.');
+            showToast('Please capture or upload at least 5 images for better accuracy.', 'warning', 5000);
             return;
         }
 
@@ -317,7 +314,7 @@ function FaceTrainingSelfContent() {
             }
 
             if (descriptors.length === 0) {
-                showMessage('error', 'Failed to extract face descriptors. Please try again with clearer images.');
+                showToast('Failed to extract face descriptors. Please try again with clearer images.', 'error', 5000);
                 setIsProcessing(false);
                 return;
             }
@@ -353,7 +350,7 @@ function FaceTrainingSelfContent() {
             router.push(`/face-training-success?type=${personType}&name=${encodeURIComponent(personName || '')}`);
         } catch (err) {
             console.error('Error saving face training:', err);
-            showMessage('error', 'Failed to save face training. Please try again.');
+            showToast('Failed to save face training. Please try again.', 'error', 5000);
         } finally {
             setIsProcessing(false);
         }
@@ -425,21 +422,6 @@ function FaceTrainingSelfContent() {
                     )}
                 </div>
 
-                {/* Message Banner */}
-                {message && (
-                    <div className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl sm:rounded-2xl border-2 flex items-start sm:items-center space-x-2 sm:space-x-3 ${message.type === 'success' ? 'bg-green-50 border-green-200' :
-                        message.type === 'error' ? 'bg-red-50 border-red-200' :
-                            'bg-orange-50 border-orange-200'
-                        }`}>
-                        {message.type === 'success' && <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0 mt-0.5 sm:mt-0" />}
-                        {message.type === 'error' && <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0 mt-0.5 sm:mt-0" />}
-                        {message.type === 'warning' && <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 flex-shrink-0 mt-0.5 sm:mt-0" />}
-                        <p className={`font-medium text-xs sm:text-sm lg:text-base flex-1 ${message.type === 'success' ? 'text-green-800' :
-                            message.type === 'error' ? 'text-red-800' :
-                                'text-orange-800'
-                            }`}>{message.text}</p>
-                    </div>
-                )}
 
                 {/* Person Info Card */}
                 <div className="bg-white rounded-2xl sm:rounded-3xl shadow-lg border border-slate-200 p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6">

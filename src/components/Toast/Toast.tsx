@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
@@ -32,23 +32,37 @@ interface ToastProviderProps {
 
 export const ToastProvider: React.FC<ToastProviderProps> = ({ children }) => {
     const [toasts, setToasts] = useState<Toast[]>([]);
+    const timeoutRefs = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+    const removeToast = useCallback((id: string) => {
+        // Clear timeout if exists
+        const timeout = timeoutRefs.current.get(id);
+        if (timeout) {
+            clearTimeout(timeout);
+            timeoutRefs.current.delete(id);
+        }
+        setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    }, []);
 
     const showToast = useCallback((message: string, type: ToastType = 'info', duration: number = 5000) => {
+        // Clear all existing toasts and their timeouts
+        timeoutRefs.current.forEach((timeout) => clearTimeout(timeout));
+        timeoutRefs.current.clear();
+        setToasts([]);
+
+        // Show new toast
         const id = Math.random().toString(36).substring(2, 9);
         const newToast: Toast = { id, message, type, duration };
 
-        setToasts((prev) => [...prev, newToast]);
+        setToasts([newToast]);
 
         if (duration > 0) {
-            setTimeout(() => {
+            const timeout = setTimeout(() => {
                 removeToast(id);
             }, duration);
+            timeoutRefs.current.set(id, timeout);
         }
-    }, []);
-
-    const removeToast = (id: string) => {
-        setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    };
+    }, [removeToast]);
 
     const getToastIcon = (type: ToastType) => {
         switch (type) {

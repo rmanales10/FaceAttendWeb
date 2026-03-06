@@ -18,9 +18,10 @@ import {
     FileText,
     Building2,
     Settings,
-    BarChart3
+    BarChart3,
+    ScanFace,
+    History
 } from 'lucide-react';
-
 const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
     { id: 'teachers', label: 'Teachers', icon: Users, path: '/dashboard/teachers' },
@@ -29,11 +30,11 @@ const menuItems = [
     { id: 'rooms', label: 'Rooms', icon: Building2, path: '/dashboard/rooms' },
     { id: 'class-schedule', label: 'Class Schedule', icon: Calendar, path: '/dashboard/class-schedule' },
     { id: 'face-training', label: 'Face Training', icon: Camera, path: '/dashboard/face-training' },
-    // { id: 'face-recognition', label: 'Face Recognition', icon: ScanFace, path: '/dashboard/face-recognition' },
+    { id: 'face-recognition', label: 'Face Recognition', icon: ScanFace, path: '/dashboard/face-recognition' },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, path: '/dashboard/analytics' },
     { id: 'reports', label: 'Reports', icon: FileText, path: '/dashboard/reports' },
     { id: 'settings', label: 'Settings', icon: Settings, path: '/dashboard/settings' },
-    // { id: 'activity-logs', label: 'Activity Logs', icon: History, path: '/dashboard/activity-logs' },
+    { id: 'activity-logs', label: 'Activity Logs', icon: History, path: '/dashboard/activity-logs' },
 ];
 
 export default function Sidebar() {
